@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/loopinvariantcm/wirloopinvariantcm.cc optimizations/loopinvariantcm/wirloopinvariantcm.h

@@ -1,0 +1,4 @@
+include arch/arm/Makefile.src
+include arch/generic/Makefile.src
+include arch/riscv/Makefile.src
+include arch/tricore/Makefile.src

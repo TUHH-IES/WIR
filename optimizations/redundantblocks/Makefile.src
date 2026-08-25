@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/redundantblocks/wirredundantblocks.cc optimizations/redundantblocks/wirredundantblocks.h

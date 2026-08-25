@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/deadcode/wirdeadcode.cc optimizations/deadcode/wirdeadcode.h

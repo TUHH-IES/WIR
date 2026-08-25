@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/riscv/optimizations/operationbitwidths/rvoperationbitwidths.cc arch/riscv/optimizations/operationbitwidths/rvoperationbitwidths.h

@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/generic/wiroptimization.cc optimizations/generic/wiroptimization.h

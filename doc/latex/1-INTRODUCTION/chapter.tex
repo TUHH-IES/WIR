@@ -1,0 +1,428 @@
+%=========================================================================
+\chapter{Introduction}
+\label{chap:introduction}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+\gls{WIR} is an open source, low-level \gls{IR} for compilers that intends to model software and architectural hardware characteristics at the level of and from the perspective of assembly code.
+Its design has been driven by the needs of and experiences from the work on back-ends and optimizations within the \gls{WCC}~\cite{FaLo10,wcc26}, which also explains its name.
+
+In contrast to classical compiler \glspl{IR}, \gls{WIR} not only models software code in the form of assembly operations, but it aims to model all aspects of an entire hardware/software system that are relevant for the purpose of code generation and optimization.
+This way, \gls{WIR} also provides means to specify, e.g., memory hierarchies and their properties, multi-core architectures, interconnects etc.
+\gls{WIR} is not bound to some fixed \gls{ISA}, but it can be retargeted to a broad variety of different instruction sets, typically from the domain of embedded processor architectures.
+Last but not least, \gls{WIR} comes with a large set of static code analyses and of code optimizations.
+These analyses and optimizations are kept generic and processor-independent as far as possible, and specializations for specific processor architectures exist.
+
+\cref{sec:overview} gives an overview about the key concepts influencing the design of \gls{WIR}.
+\cref{sec:keyfeatures} shortly describes the key features of the \gls{WIR} library.
+After that, \cref{sec:license} specifies the license conditions that apply in order to use, modify and distribute \gls{WIR}.
+Finally, \cref{sec:outline} describes the overall structure of this document.
+
+
+%-------------------------------------------------------------------------
+\section{Overview}
+\label{sec:overview}
+%-------------------------------------------------------------------------
+
+\gls{WIR} is a C++ library containing classes that model the various facets of a combined hardware/software system.
+General properties of such systems which are independent of some actual processor architecture are realized as (abstract) base classes. Object-orientation and inheritance are used to derive specialized classes for dedicated processor architectures.
+
+\begin{figure}[ht]
+  \begin{center}
+    \includegraphics[width=\textwidth]{wirsystem.png}
+  \end{center}
+  \caption{Conceptual Structure of a WIR System}
+  \label{fig:wirsystem}
+\end{figure}
+
+The top level of abstraction within \gls{WIR} is modeled by a \texttt{WIR\_System}.
+This class represents a complete heterogeneous multi-core hardware and software system (cf. \cref{fig:wirsystem}).
+Such a system consists of hardware components (\texttt{WIR\_SystemComponent}) which stand for, e.g., processor cores, memories, shared buses, etc.
+The software side of a complete system can stem from various assembly code files which are all represented by class \texttt{WIR\_CompilationUnit}.
+Since in real-life systems, software can also be structured into several tasks that are supposed to be executed concurrently under a certain task scheduling and preemption scheme, class \texttt{WIR\_TaskManager} is intended to model such task-level aspects.
+
+\begin{wirFutureWork}\label{futurework:taskmanager}
+At the time of writing of this document, the class \texttt{WIR\_TaskManager} is not yet designed and implemented in detail.
+Currently, it is just a dummy class that is fully unaware of any task-specific properties like, e.g., periods, deadlines, scheduling policies etc.
+However, in order to create a \texttt{WIR\_System}, one instance of such a dummy task manager has to be passed.
+It is one of the areas of future work to appropriately realize all required task-level aspects inside \gls{WIR}.
+For this reason, any more specific description of tasks within \gls{WIR} is omitted in this document.
+Instead, the emphasis will lie on the software code and on the hardware aspects in the following.
+\end{wirFutureWork}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Software Model}
+\label{ssec:swmodel}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.55\textwidth]{softwaremodel.png}
+  \end{center}
+  \caption{Class Diagram of WIR Software Model}
+  \label{fig:swmodel}
+\end{figure}
+
+The software model of \gls{WIR} is structured into a hierarchy of classes ranging from \texttt{WIR\_CompilationUnit} down to \texttt{WIR\_Parameter} as depicted in \cref{fig:swmodel}.
+
+As mentioned above, an object of class \texttt{WIR\_CompilationUnit} represents one single assembly code file.
+Such a file can consist of zero to several \texttt{WIR\_Function}s which call themselves, manage their stack frames, and realize argument and return value passing.
+Internally, functions themselves are grouped into \texttt{WIR\_BasicBlock}s where a basic block is defined as follows~\cite{Much97}:
+
+\begin{definition}[Basic Block] \label{def:bb}
+  A \emph{basic block} is a maximal sequence of instructions that can be entered only at the first of them and exited only from the last of them.
+  Thus, the first instruction in a basic block may be (1) the entry point of the function, (2) a target of a branch, or (3) an instruction immediately following a branch or a return.
+\end{definition}
+
+By definition, basic blocks model sequences of straight-line code where the execution of a basic block can only start with its very first instruction and must always end with its very last one.
+
+Basic blocks are formed of objects of class \texttt{WIR\_Instruction}.
+Conceptually, all the contents of one instruction is supposed to be executed in parallel, at the same point in time.
+\gls{WIR} instructions are thus the key concept to model \gls{ILP}.
+The exploitation of \gls{ILP} and thus the use of \gls{WIR} instructions can generally be driven by two factors: (1) a processor's \gls{ISA} mandates to group several operations into one large instruction (e.g., \gls{VLIW} architectures), or (2) an optimization like, e.g., instruction scheduling, clusters operations into instructions in order to parallelize as many operations as possible.
+
+Objects of class \texttt{WIR\_Operation} next represent classical machine operations at the level of assembly code.
+Thus, they basically consist of an opcode that specifies the operator to be computed by an operation.
+Besides all supported opcodes, processor \glspl{ISA} furthermore specify which format each machine operation must have, i.e., how many arguments of which type an operation expects, which arguments are used or defined by an operation, which bit-sizes such arguments can have, etc.
+In order to support the modelling of only \gls{ISA}-compliant machine operations, \gls{WIR} features structured operation formats which capture exactly the above properties of all possible kinds of machine operations.
+
+The arguments of machine operations are represented by objects of class \texttt{WIR\_Parameter}, and such parameters can finally be registers, immediate values, labels etc.
+
+All the classes presented in this section are generic in that sense that they do not depend on any specific processor architecture.
+This generic assembly-level software model of \gls{WIR} thus becomes processor-specific by connecting it to the hardware model introduced in the next section.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Hardware Model}
+\label{ssec:hwmodel}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.85\textwidth]{hardwaremodel1.png}
+  \end{center}
+  \caption{Class Diagram of WIR Hardware Model}
+  \label{fig:hwmodel1}
+\end{figure}
+
+\cref{fig:hwmodel1} depicts the overall structure of the \gls{WIR} hardware model.
+Class \texttt{WIR\_SystemComponent} is a base class modelling various kinds of building blocks from which \gls{WIR} systems can be composed.
+Using inheritance, specialized classes modelling processor cores, physical memory regions, caches and buses are derived.
+
+The central class of the \gls{WIR} hardware model is \texttt{WIR\_Processor} which serves as abstraction of a processor core with a specific \gls{ISA}.
+Objects derived from class \texttt{WIR\_Processor} provide structured information about a processor core's actual register file.
+For that purpose, \gls{WIR} processors support the specification of various register types (e.g., general-purpose registers or specific address or floating-point registers).
+For each register type, its bit width is provided and \texttt{WIR\_Register}s can be composed to form hierarchical registers so that, e.g., a pair of neighboring 32-bit registers forms a 64-bit extended register.
+Using these concepts of class \texttt{WIR\_Register}, a \gls{WIR} processor provides access to all physical registers that an \gls{ISA} actually foresees in real hardware.
+
+In addition, \gls{WIR} also inherently supports the concept of virtual registers.
+Here, the severely limited availability of physical hardware registers is neglected and an infinite amount of such virtual registers is assumed.
+Using virtual registers is crucial when implementing \gls{WIR}-based code selectors or optimizations within a compiler, since this allows to not having to worry about the availability of physical registers---whenever \gls{WIR} code shall store something new in a register, a fresh virtual register can be created just for this purpose.
+It is then the duty of a subsequent register allocator to assign all existing virtual registers to exactly those few physical registers that \texttt{WIR\_Processor} actually features.
+
+As already introduced in \cref{ssec:swmodel}, \gls{WIR} operations rely on \gls{ISA}-specific operation codes and formats.
+They are also part of the hardware model and come in the form of the classes \texttt{OpCode} and \texttt{OperationFormat}.
+Similarly, class \texttt{AddressingMode} serves to specify all addressing modes supported by a processor's \gls{ISA}.
+
+\gls{WIR} processors are closely linked to objects of class \texttt{WIR\_Section} which model object file sections like, e.g., \texttt{.text}, \texttt{.data}, \texttt{.bss} or \texttt{.rodata}.
+For each such section, attributes for, e.g., alignments or start addresses can be specified.
+\texttt{WIR\_Section}s are integral part of the memory layout model of \gls{WIR}, which is complemented by objects of class \texttt{WIR\_MemoryRegion}.
+A memory region models a physical memory region of a system architecture together with key characteristics like, e.g., base addresses and sizes, access delays or read/write/execute attributes.
+
+This memory layout model allows for a very simple and flexible modelling of memory-related aspects of \gls{WIR} systems during code analyses or optimizations.
+\texttt{WIR\_Section}s model the logical memory structure of a \gls{WIR} system, while \texttt{WIR\_MemoryRegion} models physical hardware characteristics of memories.
+Sections can now simply be mapped to regions, and objects of the \gls{WIR} software model (cf. \cref{ssec:swmodel}) like, e.g., whole functions, basic blocks or global data, can be mapped to sections.
+This model allows for a simple realization of \glspl{LTO} where knowledge about physical memory addresses of objects is key.
+Optimizations can exploit different memories by simply assigning \gls{WIR} objects to a section mapped onto a fast or energy-efficient physical memory.
+
+Modern system architectures typically form a complete \gls{SoC} with memory hierarchies consisting of several physical memory regions as well as caches.
+For this reason, class \texttt{WIR\_Cache} is also part of the hardware model.
+Objects of this class allow to model Level-1 and Level-2 instruction, data or unified caches.
+Key architectural parameters like, e.g., associativity, line sizes, write policies, amounts of offset, index and tag bits, access delays etc. are supported.
+
+Finally, interconnects are required in the hardware model to connect the processor cores to the various components of the memory hierarchy.
+This is the purpose of objects of class \texttt{WIR\_Bus} that allows to model different arbitration policies (fixed priorities, round robin, \gls{TDMA}), bus access delays etc.
+
+All these components of the \gls{WIR} hardware model can be easily instantiated and composed to form complete systems using simple system-level configuration files.
+\cref{lst:sysConfig} shows an excerpt of such a configuration file for an Infineon TriCore TC1796 system.
+As can be seen, one processor core based on the TC1.3 \gls{ISA} is instantiated (\crefrange{lst:sysconfig7}{lst:sysconfig11}).
+It comes with a memory region for program code being 1,024\,K large and having an access delay of 6 clock cycles (\crefrange{lst:sysconfig12}{lst:sysconfig22}).
+The logical memory secion \texttt{.text\_cached} is mapped to this region (\cref{lst:sysconfig21}), and between the processor core and this region, an L1 instruction cache is placed (\cref{lst:sysconfig21}).
+
+\begin{lstlisting}[style=commandline,float=t!,caption={Excerpt of a System Configuration File},label=lst:sysConfig]
+#
+# Infineon TriCore TC1796
+#
+|[tc1796]|Ü\label{lst:sysconfig1}Ü
+type               = systemÜ\label{lst:sysconfig2}Ü
+Ü\label{lst:sysconfig3}Ü
+#Ü\label{lst:sysconfig4}Ü
+# Processor core (ISA TC1.3)Ü\label{lst:sysconfig5}Ü
+#Ü\label{lst:sysconfig6}Ü
+|[CORE0]|Ü\label{lst:sysconfig7}Ü
+type               = coreÜ\label{lst:sysconfig8}Ü
+isa                = TC1.3Ü\label{lst:sysconfig9}Ü
+clockfreq          = 150000000Ü\label{lst:sysconfig10}Ü
+voltage            = 1.5Ü\label{lst:sysconfig11}Ü
+
+#
+# Program Flash with cached access (PFLASH; PMU; L2)
+#
+|[PFLASH-C]|Ü\label{lst:sysconfig12}Ü
+type               = memoryÜ\label{lst:sysconfig13}Ü
+origin             = 0x80100000Ü\label{lst:sysconfig14}Ü
+length             = 0x100000   # 1024KÜ\label{lst:sysconfig15}Ü
+dynamic_allocation = 0Ü\label{lst:sysconfig16}Ü
+attributes         = RXAC       # read/execute/allocate/cachedÜ\label{lst:sysconfig17}Ü
+cycles             = 6          # waitstates; possible values are 1-7Ü\label{lst:sysconfig18}Ü
+burstcycles        = 1Ü\label{lst:sysconfig19}Ü
+memory_type        = PFLASHÜ\label{lst:sysconfig20}Ü
+sections           = .text_cachedÜ\label{lst:sysconfig21}Ü
+hierarchy          = CORE0 L1-IÜ\label{lst:sysconfig22}Ü
+\end{lstlisting}
+
+Since all classes shown in \cref{fig:hwmodel1} are still generic and independent of some actual processor architecture, inheritance is used within \gls{WIR} to derive specific processor \glspl{ISA} (cf. \cref{fig:hwmodel2}).
+This example inheritance diagram refers to the \texttt{TC13} \gls{ISA} already mentioned above, which is inherited from class \texttt{WIR\_Processor}.
+As register types, classes \texttt{aReg}, \texttt{dReg} and \texttt{eReg} are derived which represent the processor's address, data and extended data registers.
+Consequently, physical processor registers of these types ranging from \texttt{A0}, \dots, \texttt{A15}, \texttt{D0}, \dots, \texttt{E0}, \dots, \texttt{E14} are provided.
+Class \texttt{OpCode} is specialized such that it actually enumerates all available \texttt{TC13} operation codes ranging from \texttt{ABS} to \texttt{XOR.T}.
+\gls{ISA}-specific operation formats are derived by inheriting from class \texttt{OperationFormat}.
+In \cref{fig:hwmodel2}, \texttt{DDD} denotes a 32-bit operation expecting 3 data registers as parameters where the first one is defined and the last two ones are used.
+Similarly, operation format \texttt{DDC9} represents 32-bit operations where, in contrast to above, the third parameter is a signed 9-bit immediate constant.
+Finally, \texttt{TC13}-specific addressing modes are provided like, e.g., \texttt{pre} and \texttt{post} standing for pre- and post-increment/decrement, resp.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.85\textwidth]{hardwaremodel2.png}
+  \end{center}
+  \caption{Derivation of Processor ISAs from WIR Hardware Model}
+  \label{fig:hwmodel2}
+\end{figure}
+
+Based on the above example, generic \gls{WIR} operations as introduced in \cref{ssec:swmodel} can now use \texttt{TC13}-specific opcodes, operation formats, registers etc., thus leading to highly specific \gls{WIR} hardware/software systems based on generic concepts as far as at all possible.
+
+
+%-------------------------------------------------------------------------
+\section{Key Features}
+\label{sec:keyfeatures}
+%-------------------------------------------------------------------------
+
+As already outlined in the previous section, the key conceptual features of \gls{WIR} are
+\begin{itemize}
+  \item the holistic modelling of \textit{combined hardware and software systems};
+
+  \item the entirely \textit{generic} concepts to realize the \textit{hardware, the software as well as the system model};
+
+  \item its \textit{\gls{ISA}-safeness} ensuring that only machine operations of well-defined formats can be created so that compliance with a processor manufacturer's \gls{ISA} specifications can be achieved;
+
+  \item a \textit{container infrastructure} that allows to add arbitrary kinds of meta-data like, e.g., analysis results or profiling data, to all parts of the \gls{WIR} software model;
+
+  \item the \textit{integrated memory layout} providing an easy mapping of software components onto memory regions and/or processor cores;
+
+  \item its \textit{composability} allowing to model systems featuring heterogeneous multi-cores and complex memory hierarchies;
+
+  \item the \textit{retargetability of the hardware model} to almost any relevant architecture nowadays, including (but not limited to) \gls{RISC}, \gls{DSP}, \gls{VLIW}, \gls{EPIC}, \gls{SIMD}, Network Processors.
+\end{itemize}
+
+\gls{WIR} is not only a simple representation of intermediate code for optimizing compilers, but it is a very powerful library coming with a large number of static code analyses as they are described in standard textbooks on comiler design~\cite{Appel04,Much97}.
+Currently, the following code analyses are integral part of \gls{WIR}:
+\begin{itemize}
+  \item \textit{Control Flow Analysis} provides a generic representation and visualization of \glspl{CFG}, classification of \gls{CFG} edges as, e.g., regular or back edges, \gls{CFG} traversal in depth-first or reverse-toplogical order etc.
+
+  \item \textit{Domination Analysis} determines dominators and immediate dominators according to~\cite[chapter~18.1]{Appel04} or~\cite[chapter~7.3]{Much97}.
+
+  \item \textit{Reachability Analysis} computes sets of basic blocks that might be reachable from a given position in the \gls{CFG}.
+
+  \item \textit{Structural Analysis}~\cite[chapter 7.7]{Much97} creates a hierarchical control tree formed out of nodes modelling, e.g., if-then- or if-then-else constructs, pre- or post-checked loops, switch/case constructs, proper or improper control structures etc.
+
+  \item \textit{Reaching Definitions Analysis}~\cite[chapter~17.2]{Appel04}\cite[chapter~8.1]{Much97} determines which assignments to each register \textit{may}, by \textit{some} control flow path, reach any particular point in a \gls{WIR} function.
+
+  \item \textit{Available Definitions Analysis} is very similar to reaching definitions, but it is a \textit{must} analysis that determines whether a definition reaches a use along \textit{all} control flow paths.
+
+  \item \textit{Def-Use and Use-Def Chain Analysis}~\cite[chapter~17.4]{Appel04}\cite[chapter~8.10]{Much97} bases on reaching definitions and provides a sparse representation of data flow information.
+  A Def-Use chain for a variable connects a definition of that variable to all the uses it may flow to, while a Use-Def chain connects a use to all the definitions that may flow to it.
+
+  \item \textit{Liveness Analysis}~\cite[chapter~10]{Appel04} determines which registers may be ``in use'' at the same time within some \gls{WIR} function.
+
+  \item \textit{Bit-true Data Flow Analysis}~\cite{Wag06} computes the flow of definitions and uses not with the granularity of individual registers, but it instead analyzes data flow for single bits of some register.
+  Furthermore, this analysis provides detailed information about potential values of bits, i.e., whether they are \texttt{0} or \texttt{1}, whether they don't care, or whether the original location of some bit is known.
+\end{itemize}
+
+Based on the aforementioned analyses, \gls{WIR} comes with the following code optimizations:
+
+\begin{itemize}
+  \item \textit{Unused Virtual Register Elimination} removes all unused virtual registers from \gls{WIR} functions.
+
+  \item \textit{Empty Block Elimination} removes all empty basic blocks from \gls{WIR} functions.
+
+  \item \textit{Redundant Block Elimination} merges two succeeding basic blocks into one whenever the latter can only be reached from the former.
+
+  \item \textit{Unreachable Block Elimination} removes all unreachable basic blocks.
+
+  \item \textit{Loop-Invariant Code Motion}~\cite[chapter~13.2]{Much97} recognizes computations in loops that produce the same value on every iteration of the loop, and moves them out of the loop.
+
+  \item \textit{Web Generation} determines, for each virtual register, all maximal unions of intersecting def-use chains, which are called webs~\cite[chapter~8.10]{Much97}.
+  For each identified web of some virtual register, a new virtual register is created, replacing the original one.
+  This way, live range splitting is effectively realized since the newly created virtual registers become subject to register allocation.
+
+  \item \textit{Graph Coloring-based Register Allocation} assigns all virtual registers present in \gls{WIR} functions to physical registers.
+  Its implementation bases on~\cite[chapter~16.3]{Much97}\cite[chapter~11]{Appel04}\cite{Brig92,BGM+89,Chai82}.
+  The \gls{WIR} register allocator inherently supports hierarchical registers; precolored virtual registers; live range splitting based on webs; safe coalescing using both Briggs' and George's heuristics; Chaitin's spilling heuristic taking individual positions of defs/uses, their loop nesting depths, the graph node's degree and whether source/target of a move instruction are spilled into account; Bernstein's best-of-three spilling; stack frame coalescing.
+
+  \item \textit{Dead Code Elimination}~\cite[chapter~17.3]{Appel04}\cite[chapter~18.10]{Much97} removes all \gls{WIR} operations whose results are not used on any control flow path leading from the operation.
+
+  \item \textit{Constant Folding}~\cite[chapter~12.1]{Much97} replaces \gls{WIR} operations that are known to produce only constant results by compile-time evaluated constants.
+
+  \item \textit{Constant Propagation}~\cite[chapter~12.6]{Much97} typically is a transformation that, given an assignment of a constant to a register, replaces later uses of the register by the constant.
+  In the context of \gls{WIR} being a low-level \gls{IR}, this regularly boils down to replacing register parameters of operations by immediates in order to make constant operands explicit.
+
+  \item \textit{Redundant Code Elimination} builds upon the aforementioned bit-true data flow analysis and determines whether two positions in a \gls{WIR} function produce equivalent register values in a bit-true sense.
+  If so, one code position is eliminated and only the remaining one is kept.
+  This transformation can be seen as a kind of copy propagation~\cite[chapter~17.3]{Appel04}\cite[chapter~12.5]{Much97}, generalized to the level of bit values inside registers.
+
+  \item \textit{Jump Correction} uses the memory layout infrastructure of \gls{WIR} and determines the addresses of jumps and of their jump targets.
+  Should the displacement between a jump and its target be too large for the jump's operation format, e.g., due to some memory allocation optimization, this pass generates specific code for long jumps.
+
+  \item \textit{Operation Bit Width Reduction} replaces operations of large bit widths by more compact ones in order to reduce code size.
+
+  \item \textit{Predicated Execution} replaces conditionally executed operations by variants featuring a predicate in order to avoid branching.
+
+  \item \textit{Peephole Optimization} supports very local optimizations where a small window or peephole is moved across the \gls{WIR} code to search for specific code patterns subject to optimization.
+
+  \item \textit{Local Instruction Scheduling}~\cite[chapter~13.2]{Much97} reorders operations locally inside basic blocks in order to overlap their execution whenever possible.
+  \gls{ASAP} and \gls{ALAP} can be used for scheduling, and various priority heuristics using, e.g., maximum delays or mobility of operations can be applied.
+\end{itemize}
+
+All aforementioned analyses and optimizations are designed such that they base on the generic and processor-independent concepts of \gls{WIR} as far as possible.
+Processor-specific adaptations are again realized using inheritance from the analyses' and optimizations' base classes, enabling the support of different architectures with only moderate effort.
+
+\begin{table}[t]
+  \begin{center}
+    \caption{Availability of WIR Analyses and Optimizations for Supported ISAs}
+    \label{tab:AnaOptISA}
+    \begin{tabular}{|ll||c|c|c|c|c|c||c||c|c||c|c|}
+      \hline
+      & & \rotatebox[origin=l]{90}{\textbf{ARMv4}} & \rotatebox[origin=l]{90}{\textbf{ARMv4T}} & \rotatebox[origin=l]{90}{\textbf{ARMv5T}} & \rotatebox[origin=l]{90}{\textbf{ARMv5TE}} & \rotatebox[origin=l]{90}{\textbf{ARMv5TEJ}} & \rotatebox[origin=l]{90}{\textbf{ARMv6}} & \rotatebox[origin=l]{90}{\textbf{MIPS SPIM\ \ \ }} & \rotatebox[origin=l]{90}{\textbf{RV32IMC}} & \rotatebox[origin=l]{90}{\textbf{RV32IFD}} & \rotatebox[origin=l]{90}{\textbf{TC1.3}} & \rotatebox[origin=l]{90}{\textbf{TC1.3.1}} \\
+      \hhline{|==#=|=|=|=|=|=#=#=|=#=|=|}
+      \parbox[t]{4mm}{\multirow{9}{*}{\rotatebox[origin=c]{90}{\textbf{Analyses}}}} &
+        Control Flow            & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Domination              & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Reachability            & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Structural Control Flow & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Reaching Definitions    & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Available Definitions   & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Def-Use/Use-Def Chains  & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Liveness                & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Bit-true Data Flow      &            &            &            &            &            &            &            & \checkmark &            & \checkmark & \checkmark \\
+      \hhline{|==#=|=|=|=|=|=#=#=|=#=|=|}
+      \parbox[t]{4mm}{\multirow{14}{*}{\rotatebox[origin=c]{90}{\textbf{Optimizations}}}} &
+        Unused Virtual Registers   & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Empty Blocks               & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Redundant Blocks           & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Unreachable Blocks         & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Loop-Invariant Code Motion & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Webs                       & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+      & Register Allocation        &            &            &            &            &            &            &            & \checkmark & (\checkmark) & \checkmark & \checkmark \\
+      & Dead Code                  &            &            &            &            &            &            &            & \checkmark &            & \checkmark & \checkmark \\
+      & Constant Folding           &            &            &            &            &            &            &            & \checkmark &            & \checkmark & \checkmark \\
+      & Constant Propagation       &            &            &            &            &            &            &            & \checkmark &            & \checkmark & \checkmark \\
+      & Redundant Code             &            &            &            &            &            &            &            & \checkmark &            & \checkmark & \checkmark \\
+      & Jump Correction            &            &            &            &            &            &            &            &            &            & \checkmark & \checkmark \\
+      & Operation Bit Widths       &            &            &            &            &            &            &            & \checkmark &            & \checkmark & \checkmark \\
+      & Predicated Execution       &            &            &            &            &            &            &            &            &            & \checkmark & \checkmark \\
+      & Peephole                   &            &            &            &            &            &            &            &            &            & \checkmark & \checkmark \\
+      & Instruction Scheduling     &            &            &            &            &            &            &            &            &            & \checkmark & \checkmark \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+At the time of writing of this document, the following \glspl{ISA} are available as \gls{WIR} hardware models:
+\begin{itemize}
+  \item \textit{ARM} instruction sets ARMv4, ARMv4T, ARMv5T, ARMv5TE, ARMv5TEJ, ARMv6~\cite{arm05}
+  \item \textit{MIPS} SPIM instruction set~\cite{mips07}
+  \item \textit{RISC-V} base integer instruction set RV32I including \gls{ISA} standard extensions ``M'' (integer multiplication and division), ``F'' (single-precision floating-point), ``D'' (double-precision floating-point) and ``C'' (compressed instructions)~\cite{riscv17}, and all possible combinations of these
+  \item \textit{Infineon TriCore} instruction sets V1.3, V1.3.1~\cite{tricore08}
+\end{itemize}
+Based on these \glspl{ISA}, the following actual hardware implementations are modeled as \gls{WIR} systems:
+\begin{itemize}
+  \item NXP LPC2880 (ARM7TDMI)
+  \item STMicroelectronics STM32F051xx (ARM Cortex-M0)
+  \item Espressif ESP32-C3 (RV32IMC)
+  \item RISC-V RudolV (RV32IMC)
+  \item Infineon TriCore TC1796 (TriCore v1.3)
+  \item Infineon TriCore TC1797 (TriCore v1.3.1)
+\end{itemize}
+
+\cref{tab:AnaOptISA} shows in how far all the analyses and optimizations described above are available for the various \glspl{ISA} supported by \gls{WIR}.
+Due to their maximally generic design, many of them are available for all \glspl{ISA} out of the box.
+The Infineon TriCore \glspl{ISA} are supported by all analyses and optimizations, followed by RISC-V which currently is under continuous development.
+The MIPS hardware model is not under active development, it basically serves as a demonstrator for the various design concepts of \gls{WIR}.
+\begin{wirFutureWork}
+Fully supporting the ARM and RISC-V models by the analyses and optimizations is part of the future work.
+\end{wirFutureWork}
+
+The code base of \gls{WIR} comes with the following key features:
+\begin{itemize}
+  \item entirely written in \textit{modern C++17}, with a \textit{clean and straightforward \gls{API}};
+  \item \textit{public interfaces} of \gls{WIR} classes are almost completely \textit{free of pointers}; instead, \gls{WIR} maximally exploits references in order to avoid memory mismanagement;
+  \item all \gls{WIR} classes come with a \textit{clear concept of ownership} featuring \textit{automatic destruction of objects}, this way eliminating the need for explicit object deletion in application code;
+  \item \textit{regular code quality checks} via nightly builds using the static analyzers \texttt{cppcheck} and clang's \texttt{scan-build} \textit{demonstrate the absence of any issues} in the \gls{WIR} code base;
+  \item \textit{dynamic code quality checks} based on tens of thousands of compiler runs using \gls{WIR} built with active AddressSanitizer and memory protection perform \textit{without any observed issue} like, e.g., memory leaks, use-after-free errors etc.;
+  \item \gls{WIR} comes with a series of unit tests covering both its generic as well as \gls{ISA}-specific parts; these \textit{unit tests help to avoid regressions} in the code base, and also \textit{serve as simple code examples} how to create and manipulate the various \gls{WIR} classes.
+\end{itemize}
+
+
+%-------------------------------------------------------------------------
+\section{License}
+\label{sec:license}
+%-------------------------------------------------------------------------
+
+The code of the \gls{WIR} library is \textcopyright{} Heiko Falk, 2015 -- 2026, and it is made available under the MIT license enclosed with the software.
+
+Over and above the legal restrictions imposed by this license, if you use this software for an academic publication then you are obliged to provide proper attribution.
+This shall come in the form of a citation in your publication such as\TODO{DOIs}
+
+\hfill\begin{minipage}{\dimexpr\textwidth-1cm}
+  H. Falk. The WCC Intermediate Representation (WIR) Framework.
+  J. Awes. Softw. 12, 37654, DOI ??? (2026).
+\end{minipage}
+
+or in the form of attributions directly in this code such as
+
+\hfill\begin{minipage}{\dimexpr\textwidth-1cm}
+  H. Falk. WIR: The WCC Intermediate Representation, \WIRVERSION.
+  github.com/cknight/acds, Zenodo DOI.
+\end{minipage}
+
+or (ideally) both. The full license text as enclosed with the software is:
+
+\VerbatimInput{LICENSE}
+
+
+%-------------------------------------------------------------------------
+\section{Outline}
+\label{sec:outline}
+%-------------------------------------------------------------------------
+
+The typical use cases in the context of \gls{WIR} are:
+\begin{itemize}
+  \item How to build and install the software?
+  \item How to use the software as is in my own compiler project?
+  \item How to extend \gls{WIR} by support for new target architectures and \glspl{ISA}?
+  \item How to extend \gls{WIR} by new features and concepts, analyses and optimizations?
+\end{itemize}
+
+In order to address these topics, the rest of this document is structured into the following parts which aim to provide more details about the different scenarios how to use and work with \gls{WIR}:
+\begin{itemize}
+  \item \cref{part:installation}: Build \& Installation Guide (\cpageref{part:installation} ff.)
+  \item \cref{part:use}: User's Guide (\cpageref{part:use} ff.)
+  \item \cref{part:retarget}: Retargeting Guide (\cpageref{part:retarget} ff.)
+  \item \cref{part:develop}: Developer's Guide (\cpageref{part:develop} ff.)
+\end{itemize}
+
+This manual does not contain any form of a \gls{WIR} Reference Guide, since this would exceed the limits of a reasonably manageable document by far.
+Instead, the reader is referred to the browsable HTML documentation of \gls{WIR} that can be generated using \texttt{doxygen} as described in \cref{sec:configure}.
+
+\cleardoubleoddpage

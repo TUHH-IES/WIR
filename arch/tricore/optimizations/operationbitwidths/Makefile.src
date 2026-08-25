@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/tricore/optimizations/operationbitwidths/tcoperationbitwidths.cc arch/tricore/optimizations/operationbitwidths/tcoperationbitwidths.h

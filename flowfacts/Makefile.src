@@ -1,0 +1,5 @@
+libwir_la_SOURCES      += flowfacts/wirentrypoint.cc flowfacts/wirentrypoint.h \
+                          flowfacts/wirflowfact.cc flowfacts/wirflowfact.h \
+                          flowfacts/wirflowfactupdater.cc flowfacts/wirflowfactupdater.h \
+                          flowfacts/wirflowrestriction.cc flowfacts/wirflowrestriction.h \
+                          flowfacts/wirloopbound.cc flowfacts/wirloopbound.h

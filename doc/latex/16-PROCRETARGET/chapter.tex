@@ -1,0 +1,1501 @@
+%=========================================================================
+\chapter{Retargeting of Processor Models}
+\label{chap:procretarget}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+This chapter describes the steps needed to extend the \gls{WIR} library by new processor and system models.
+These descriptions cover the two scenarios where either a completely new processor model is added from scratch, or where a new model is derived from already existing ones -- see \cref{fig:wirprocessors} for an illustration of both scenarios.
+In general, retargeting \gls{WIR} for new processors consists of the following major steps:
+\begin{itemize}
+  \item creation of a rudimentary C++ class that will hold the new processor model (cf. \cref{sec:newproc});
+  \item addition of the new class to the initialization and registration mechanisms of \gls{WIR} (cf. \cref{sec:newprocinit});
+  \item extension of this rudimentary processor class by specific \gls{ISA} features such as register types and classes, immediates, opcodes and operation formats, addressing modes etc. (cf. \cref{sec:newisa});
+  \item implementation and registration of processor-specific stream output functions (cf. \cref{sec:newio});
+  \item design of new system configuration files involving the novel processor model (cf. \cref{sec:newsys});
+  \item provision of both positive and negative unit tests for all newly created C++ classes (cf. \cref{sec:newtests}).
+\end{itemize}
+
+
+%-------------------------------------------------------------------------
+\section{Setup of a New Processor Model's Class}
+\label{sec:newproc}
+%-------------------------------------------------------------------------
+
+In case that a completely novel processor architecture is modeled, it is first necessary to create a new architecture-specific directory and to integrate this into the GNU Build System of \gls{WIR}.
+The individual steps for this task are:
+\begin{enumerate}
+  \item Change into the \texttt{arch} sub-directory of the \gls{WIR} software package (cf. \cref{fig:wircodedirectory}) and create a new directory therein with a speaking name for the processor architecture to be modeled.
+
+  \begin{wirNote}
+  Let \texttt{\itshape archDir} be the name of this directory where the newly created processor model will reside.
+  \end{wirNote}
+  \item Extend file \texttt{WIR/arch/README} by a short description.
+  \item Add \texttt{\itshape archDir} to the \texttt{SUBDIRS} directive of file \texttt{WIR/arch/Makefile.am}.
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/Makefile.am} with the following contents: \\
+\begin{lstlisting}[style=code,float=h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+SUBDIRS                =
+EXTRA_DIST             =
+\end{lstlisting}
+  \item Add a new line \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/Makefile| \\
+  to the \texttt{AC\_CONFIG\_FILES} directive at the very end of file \texttt{WIR/configure.ac} in the top-level directory of the whole \gls{WIR} software package.
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/Makefile.src| \\
+  to file \texttt{WIR/arch/Makefile.src}.
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/Makefile.src} with the following contents:
+\begin{lstlisting}[style=code,float=h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES     +=
+
+Ü{\itshape archDir}Üsysconfdir      = ${sysconfdir}/Ü{\itshape archDir}Ü
+Ü{\itshape archDir}Üsysconf_DATA    =
+\end{lstlisting}
+\end{enumerate}
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Header File for a New Processor Model's Class},label=lst:newprocheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_H^
+
+// Include WIR headers
+^#include^ §<wir/wirprocessor.h>§Ü\label{lst:newprocheader1}Ü
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü : public WIR_Processoræ<æÜ{\itshape newModel}Üæ>æÜ\label{lst:newprocheader2}Ü
+{
+  public:
+
+    // Default constructor.
+    Ü{\itshape newModel}Ü@( void )@;Ü\label{lst:newprocheader3}Ü
+
+    // Copy constructor.
+    Ü{\itshape newModel}Ü@(@ const Ü{\itshape newModel}Ü æ&æo @)@;Ü\label{lst:newprocheader4}Ü
+
+    // Move constructor.
+    Ü{\itshape newModel}Ü@(@ Ü{\itshape newModel}Ü æ&&æo @)@;Ü\label{lst:newprocheader5}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü@( void )@;Ü\label{lst:newprocheader6}Ü
+
+    // Copy-assignment operator.
+    Ü{\itshape newModel}Ü æ&æ operator æ=æ @(@ const Ü{\itshape newModel}Ü æ&æo @)@;Ü\label{lst:newprocheader7}Ü
+
+    // Move-assignment operator.
+    Ü{\itshape newModel}Ü æ&æ operator æ=æ @(@ Ü{\itshape newModel}Ü æ&&æo @)@;Ü\label{lst:newprocheader8}Ü
+
+    // Globally initialize a processor model.
+    static @void@ init@( void )@;Ü\label{lst:newprocheader9}Ü
+
+  private:
+
+    // Create a deep copy of a processor.
+    virtual WIR_BaseProcessor æ*æclone@( void )@ const override;Ü\label{lst:newprocheader10}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+The above steps require a complete rebuild of the GNU Build System so that the bootstrapping, configuration and build procedures (cf. \cref{sec:bootstrap,sec:configure,chap:build}, resp.) need to be carried out once again.
+
+For the case that a new processor model shall be created by inheriting from an already existing one, none of the above steps are required.
+
+\begin{wirNote}
+Alternatively, let \texttt{\itshape archDir} be the name of the directory underneath the \texttt{arch} sub-directory where the already existing processor model resides.
+\end{wirNote}
+
+The next task consists of setting up a rudimentary header file that declares the C++ class of the newly created processor model.
+\begin{wirNote}
+Let \texttt{\itshape newModel} be a speaking name for the actual \gls{ISA} to be modeled.
+\end{wirNote}
+
+\begin{enumerate}[resume]
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} according to the general structure depicted in \cref{lst:newprocheader}.
+  \cref{lst:newprocheader2} shows the scenario for a completely new processor model that thus inherits from the generic base class \texttt{WIR\_Processor} included in \cref{lst:newprocheader1}.
+  Alternatively, the new class needs to inherit from some already existing model that needs to be included instead of \texttt{wirprocessor.h} in \cref{lst:newprocheader1}.
+
+  The new class initially only comes with its standard constructors (\crefrange{lst:newprocheader3}{lst:newprocheader5}), a virtual destructor (\cref{lst:newprocheader6}), assignment operators (\cref{lst:newprocheader7,lst:newprocheader8}) and a static initialization method (\cref{lst:newprocheader9}).
+  Furthermore, a private \texttt{clone} method is required for type-safe deep copies of inherited processor models (\cref{lst:newprocheader10}).
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}}.cc according to the rudimentary structure depicted in \cref{lst:newprocimpl}.
+  Again, this code example refers to the scenario that an entirely new architecture inherits from base class \texttt{WIR\_Processor}.
+  If the new model is derived from an already existing one, appropriate changes of the base class need to be applied to \cref{lst:newprocimpl3,lst:newprocimpl6,lst:newprocimpl7,lst:newprocimpl10,lst:newprocimpl12}.
+
+  The implementation of the constructors, the destructor and the assignment operators is rather straightforward, the only noteworthy aspect is that the default constructor should assign meaningful names as processor and \gls{ISA} names (cf. \cref{lst:newprocimpl4,lst:newprocimpl5}).
+  The currently empty \texttt{init} method will be responsible for the proper initialization of the new processor model.
+  Finally, the \texttt{clone} method must be provided as shown in \cref{lst:newprocimpl15} such that it calls the copy constructor of the new class.
+  The purpose is to have one single virtual method available in the entire class hierarchy derived from \texttt{WIR\_Processor} that is used internally to obtain appropriate deep copies of actual processor models.
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|.h| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Class},label=lst:newprocimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§Ü\label{lst:newprocimpl1}Ü
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§Ü\label{lst:newprocimpl2}Ü
+
+namespace WIR {
+
+// Default constructor.
+Ü{\itshape newModel}Ü::Ü{\itshape newModel}Ü@( void ) :@ WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ {}Ü\label{lst:newprocimpl3}Ü
+{
+  setProcessorName@(@ "Ü{\itshape\color{red} some name of the processor architecture}Ü" @)@;Ü\label{lst:newprocimpl4}Ü
+  setISAName@(@ "Ü{\itshape\color{red} some name of the modeled processor ISA}Ü" @)@;Ü\label{lst:newprocimpl5}Ü
+};
+
+// Copy constructor.
+Ü{\itshape newModel}Ü::Ü{\itshape newModel}Ü@(@ const Ü{\itshape newModel}Ü æ&æo @) :@ WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ { o }Ü\label{lst:newprocimpl6}Ü
+{};
+
+// Move constructor.
+Ü{\itshape newModel}Ü::Ü{\itshape newModel}Ü@(@ Ü{\itshape newModel}Ü æ&&æo @) :@ WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ { ästd::moveä@(@ o @)@ }Ü\label{lst:newprocimpl7}Ü
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü::~Ü{\itshape newModel}Ü@( void )@Ü\label{lst:newprocimpl8}Ü
+{};
+
+// Copy-assignment operator.
+Ü{\itshape newModel}Ü æ&æ Ü{\itshape newModel}Ü::operator æ=æ @(@ const Ü{\itshape newModel}Ü æ&æo @)@Ü\label{lst:newprocimpl9}Ü
+{
+  WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ::operator æ=æ @(@ o @)@;Ü\label{lst:newprocimpl10}Ü
+  return@(@ *this @)@;
+};
+
+// Move-assignment operator.
+Ü{\itshape newModel}Ü æ&æ Ü{\itshape newModel}Ü::operator æ=æ @(@ Ü{\itshape newModel}Ü æ&&æo @)@Ü\label{lst:newprocimpl11}Ü
+{
+  WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ::operator æ=æ @(@ ästd::moveä@(@ o @) )@;Ü\label{lst:newprocimpl12}Ü
+  return@(@ *this @)@;
+};
+
+// Globally initialize a processor model.
+@void@ Ü{\itshape newModel}Ü::init@( void )@Ü\label{lst:newprocimpl13}Ü
+{};
+
+// Create a deep copy of a processor.
+WIR_BaseProcessor æ*æÜ{\itshape newModel}Ü::clone@( void )@ const
+{
+  return@(@ new Ü{\itshape newModel}Ü@(@ æ*æthis @) )@;Ü\label{lst:newprocimpl15}Ü
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Integration of a New Processor Model Into the WIR Library}
+\label{sec:newprocinit}
+%-------------------------------------------------------------------------
+
+In order to be able to use the new model set up in the previous section, it needs to be initialized and registered within the \gls{WIR} library.
+This requires the following steps:
+\begin{enumerate}[resume]
+  \item Extend the currently empty \texttt{init} method by the structure depicted in \cref{lst:newinit}.
+  It is important to register the new processor model as shown in \cref{lst:newinit5} because without this, \gls{WIR} will fail to create actual systems using the new model from system configuration files.
+
+  The interested reader is strongly encouraged to directly put the comments from \crefrange{lst:newinit2}{lst:newinit4} and \cref{lst:newinit6} in the code, since they provide a required internal structure to the \texttt{init} method that will be filled with contents in the upcoming sections of this document.
+
+  \clearpage
+  \newpage
+
+  \begin{wirWarn}
+    It has to be ensured that the registration of the processor model shown in \cref{lst:newinit5} of \cref{lst:newinit} always comes after all other registrations of I/O functions (cf. \cref{sec:newio}), operation formats and opcode mappings (cf. \cref{sec:newisa}), and before the initialization of any other processor models derived from the current class.
+  \end{wirWarn}
+
+\begin{lstlisting}[style=code,float=!t,caption={General Structure of a New Processor Model's \texttt{init} Method},label=lst:newinit]
+// Globally initialize a processor model.
+@void@ Ü{\itshape newModel}Ü::init@( void )@Ü\label{lst:newinit1}Ü
+{
+  // Register I/O functions.Ü\label{lst:newinit2}Ü
+
+  // Register operation formats.Ü\label{lst:newinit3}Ü
+
+  // Register opcode to operation format mappings.Ü\label{lst:newinit4}Ü
+
+  // Register this current processor model. This MUST be the second-last section in this method.
+  registerProcessor@(@ Ü{\itshape newModel}Ü@() )@;Ü\label{lst:newinit5}Ü
+
+  // Finally, initialize derived processor models.Ü\label{lst:newinit6}Ü
+};
+\end{lstlisting}
+
+  \item If the new processor model is not derived from an already existing one, function \texttt{WIR\_Init} from file \texttt{wir/ wirmisc.cc} has to be extended.
+  \texttt{WIR\_init} is the central point for initialization of the whole \gls{WIR} library.
+  One crucial aspect of \texttt{WIR\_init} is to trigger the initialization of all processor models known to \gls{WIR}, which is shown in \cref{lst:newwirinit3} of \cref{lst:newwirinit} and below.
+  As a consequence, the initialization of any completely new processor model has to be added to \texttt{WIR\_init} as depicted in \cref{lst:newwirinit4}.
+
+\begin{lstlisting}[style=code,float=!b,caption={Extension of function \texttt{WIR\_Init}},label=lst:newwirinit]
+// Include WIR headers
+[...]
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§Ü\label{lst:newwirinit1}Ü
+
+// WIR_Init performs some global initialization tasks for the entire WIR library.
+@void@ WIR_Init@( void )@Ü\label{lst:newwirinit2}Ü
+{
+  [...]
+
+  // Initialize WIR processor models.Ü\label{lst:newwirinit3}Ü
+  ARMv4::init@()@;
+  MIPS::init@()@;
+  RV32I::init@()@;
+  TC13::init@()@;
+  Ü{\itshape newModel}Ü::init@()@;Ü\label{lst:newwirinit4}Ü
+};
+\end{lstlisting}
+
+  In order to introduce the new processor model to \texttt{WIR\_init}, its header file \texttt{{\itshape newModel}.h} has to be included at the top of file \texttt{wirmisc.cc} (cf. \cref{lst:newwirinit1}).
+
+  \item In the case that the new processor model inherits from some already existing class within the \texttt{arch} directory hierarchy, this already existing base class must come with a full-fledged \texttt{init} method itself.
+  Thus, this \texttt{init} method of the base class needs to be extended by \texttt{{\itshape newModel}::init();} at its very end in that section that is responsible to initialize derived processor models (compare \cref{lst:newinit6} of \cref{lst:newinit}).
+  Of course, \texttt{{\itshape newModel}.h} needs to be included by the base class for this purpose.
+\end{enumerate}
+
+
+%-------------------------------------------------------------------------
+\section{Addition of Processor-Specific ISA Features}
+\label{sec:newisa}
+%-------------------------------------------------------------------------
+
+The main effort of retargeting \gls{WIR} for new processors goes in the careful analysis of the new architecture's \gls{ISA} specifications and their precise transfer into a \gls{WIR} processor model as described in \cref{ssec:procmodel}.
+Since the concepts described in \cref{ssec:procmodel} and all its subsections form the base of the generic \gls{WIR} processor model, all retargeting steps described in the sequel follow the very same structure.
+
+\begin{wirNote}
+Let \texttt{\itshape baseClass} be the name of the base class from which the new processor model inherits.
+\end{wirNote}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Register Types}
+\label{ssec:newregtypes}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\begin{lstlisting}[style=code,float=t,caption={Declaration of a New Processor Model's Register Types},label=lst:newregtypes]
+class Ü{\itshape newModel}Ü : public Ü{\itshape baseClass}Ü
+{
+  public:
+
+    [...]
+
+    class RegisterType : public Ü{\itshape baseClass}Ü::RegisterTypeÜ\label{lst:newregtypes1}Ü
+    {
+      public:
+
+        static const RegisterType Ü{\itshape regType1}Ü;Ü\label{lst:newregtypes2}Ü
+
+        static const RegisterType Ü{\itshape regType2}Ü;Ü\label{lst:newregtypes3}Ü
+
+        [...]
+
+      protected:
+
+        // Inherit the constructors from the base class.
+        using Ü{\itshape baseClass}Ü::RegisterType::RegisterType;Ü\label{lst:newregtypes4}Ü
+    };
+
+    [...]
+};
+\end{lstlisting}
+
+The following steps describe how to extend the new architecture's model by types of different registers.
+\begin{enumerate}[resume]
+  \item Edit file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} and extend the new class by a novel, public class \texttt{RegisterType} that inherits from \texttt{WIR\_Processor::RegisterType} (cf. \cref{lst:newregtypes}).
+  For all different classes of registers that the new architecture features and that can occur as parameters of machine operations, add a new member declaration to class \texttt{RegisterType} as shown in \cref{lst:newregtypes2,lst:newregtypes3}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}registertypes.cc} according to the structure depicted in \cref{lst:newregtypesimpl}.\label{enum:newregtype}
+  For each register type declared in \cref{lst:newregtypes}, a dedicated instance needs to be provided as shown in \cref{lst:newregtypesimpl1,lst:newregtypesimpl2} of \cref{lst:newregtypesimpl}.
+  Ensure that at the positions indicated by \texttt{\itshape [.{}.{}.]} in \cref{lst:newregtypesimpl1,lst:newregtypesimpl2}, the constructor of class \texttt{RegisterType} is called with the proper strings for prefixes and suffixes of virtual and physical registers, as well as with the register type's bit width (cf. \cref{lst:regtypes5} of \cref{lst:regtypes}).
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Processor Model's Register Types},label=lst:newregtypesimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+const Ü{\itshape newModel}Ü::RegisterType Ü{\itshape newModel}Ü::RegisterType::Ü{\itshape regType1}Ü { Ü{\itshape\color{gray} [.{}.{}.]}Ü };Ü\label{lst:newregtypesimpl1}Ü
+const Ü{\itshape newModel}Ü::RegisterType Ü{\itshape newModel}Ü::RegisterType::Ü{\itshape regType2}Ü { Ü{\itshape\color{gray} [.{}.{}.]}Ü };Ü\label{lst:newregtypesimpl2}Ü
+
+[...]
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|registertypes.cc| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Registers}
+\label{ssec:newregs}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Based on the register types introduced in the previous section, the next step is to provide classes modelling virtual registers of a certain type.
+
+\begin{wirNote}
+Let \texttt{\itshape regType} be some short name of a register type declared in \cref{ssec:newregtypes}.
+\end{wirNote}
+
+\begin{enumerate}[resume]
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModelregType}virtual.h} following the structure shown in \cref{lst:newvregheader}.
+  In analogy to \cref{sec:newproc}, such a new virtual register class simply comes with its standard constructors, a virtual destructor, assignment operators, and a virtual \texttt{clone} method for deep copies.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Virtual Register's Class},label=lst:newvregheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_Ü{\itshape\color{darkgreen}regType}ÜVIRTUAL_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_Ü{\itshape\color{darkgreen}regType}ÜVIRTUAL_H^
+
+// Include WIR headers
+^#include^ §<wir/wirvirtualregister.h>§
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV final : public WIR_VirtualRegisterÜ\label{lst:newvregheader1}Ü
+{
+  public:
+
+    // Default constructor.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@( void )@;Ü\label{lst:newvregheader2}Ü
+
+    // Copy constructor.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æo @)@;Ü\label{lst:newvregheader3}Ü
+
+    // Move constructor.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@(@ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&&æo @)@;Ü\label{lst:newvregheader4}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@( void )@;Ü\label{lst:newvregheader5}Ü
+
+    // Copy-assignment operator.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æ operator æ=æ @(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æo @)@;Ü\label{lst:newvregheader6}Ü
+
+    // Move-assignment operator.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æ operator æ=æ @(@ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&&æo @)@;Ü\label{lst:newvregheader7}Ü
+
+  protected:
+
+    // Create a deep copy of a virtual register.
+    virtual Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ*æclone@( void )@ const;Ü\label{lst:newvregheader8}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  Have this header file included by file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModelregType}virtual.cc} implementing this new virtual register according to \cref{lst:newvregimpl}.
+
+  \newpage
+
+  If the newly created register class models hierarchical registers (cf. \cref{sssec:regs}), the default constructor from \cref{lst:newvregimpl1} needs to create and push back the required number of virtual child registers of the appropriate sub-register class:
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+// Default constructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@( void ) :@ WIR_VirtualRegister { Ü{\itshape newModel}Ü::RegisterType::Ü{\itshape regType}Ü }
+{
+  // Create two virtual child registers of type childRegType.
+  pushBackChild@(@ Ü{\itshape newModel}Ü_Ü{\itshape childRegType}ÜV@() )@;
+  pushBackChild@(@ Ü{\itshape newModel}Ü_Ü{\itshape childRegType}ÜV@() )@;
+};
+\end{lstlisting}
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|virtual.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|virtual.h| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Virtual Register's Class},label=lst:newvregimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+// Default constructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@( void ) :@ WIR_VirtualRegister { Ü{\itshape newModel}Ü::RegisterType::Ü{\itshape regType}Ü }Ü\label{lst:newvregimpl1}Ü
+{};
+
+// Copy constructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æo @) :@ WIR_VirtualRegister { o }Ü\label{lst:newvregimpl2}Ü
+{};
+
+// Move constructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@(@ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&&æo @) :@ WIR_VirtualRegister { ästd::moveä@(@ o @)@ }Ü\label{lst:newvregimpl3}Ü
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::~Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@( void )@Ü\label{lst:newvregimpl4}Ü
+{};
+
+// Copy-assignment operator.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::operator æ=æ @(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æo @)@Ü\label{lst:newvregimpl5}Ü
+{
+  WIR_VirtualRegister::operator æ=æ @(@ o @)@;
+  return@(@ *this @)@;
+};
+
+// Move-assignment operator.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&æ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV::operator æ=æ @(@ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ&&æo @)@Ü\label{lst:newvregimpl6}Ü
+{
+  WIR_VirtualRegister::operator æ=æ @(@ ästd::moveä@(@ o @) )@;
+  return@(@ *this @)@;
+};
+
+// Create a deep copy of a virtual register.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV æ*æÜ{\itshape newModel}Ü_Ü{\itshape regType}ÜV::clone@( void )@ constÜ\label{lst:newvregimpl7}Ü
+{
+  return@(@ new Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV@(@ æ*æthis @) )@;
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+Following a similar approach, individual classes for physical registers of each newly declared register type need to be provided.
+More precisely, this involves the following steps for non-hierarchical registers that do not feature any child registers:
+
+\begin{enumerate}[resume]
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModelregType}physical.h} following the structure shown in \cref{lst:newphregheader}.
+  The public interface of physical register classes is restricted to the virtual destructor only (cf. \cref{lst:newphregheader2}).
+  All constructors or operators that create new instances of physical registers are private, since physical registers are created only when new processor models are created.
+  This is also the reason behind the two \texttt{friend} declarations from \cref{lst:newphregheader3,lst:newphregheader4}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Physical Register's Class},label=lst:newphregheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_Ü{\itshape\color{darkgreen}regType}ÜPHYSICAL_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_Ü{\itshape\color{darkgreen}regType}ÜPHYSICAL_H^
+
+// Include WIR headers
+^#include^ §<wir/wirphysicalregister.h>§
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP final : public WIR_PhysicalRegisterÜ\label{lst:newphregheader1}Ü
+{
+  public:
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@( void )@;Ü\label{lst:newphregheader2}Ü
+
+  private:
+
+    friend class WIR_BaseProcessor;Ü\label{lst:newphregheader3}Ü
+    friend class Ü{\itshape newModel}Ü;Ü\label{lst:newphregheader4}Ü
+
+    // No standard construction allowed, only the below default constructor may be used.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@( void )@ æ=æ delete;Ü\label{lst:newphregheader5}Ü
+
+    // Default constructor.
+    explicit Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@(@ const ästd::stringä æ&æn, bool isSP æ=æ false @)@;Ü\label{lst:newphregheader6}Ü
+
+    // Copy constructor.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ&æo @)@;Ü\label{lst:newphregheader7}Ü
+
+    // Copy-assignment operator.
+    Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ&æ operator æ=æ @(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ&æo @)@;Ü\label{lst:newphregheader8}Ü
+
+    // Create a deep copy of a physical register.
+    virtual Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ*æclone@( void )@ const;Ü\label{lst:newphregheader9}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  The default constructor without any arguments is disabled (\cref{lst:newphregheader5}) so that new physical registers can only be instantiated by providing a string holding the register's name according to the new processor model's \gls{ISA} and an optional Boolean flag indicating whether the register to be created is the architecture's stack pointer (\cref{lst:newphregheader6}).
+  Please note that this constructor does not expect the full name of a physical register as argument.
+  If, e.g., an architecture's registers are named from \texttt{x0} to \texttt{x31}, then their common prefix ``\texttt{x}'' is already specified during the setup of the corresponding register type in \cref{enum:newregtype}.
+  Thus, the physical register's constructor only gets the unique part of its name as argument, such as ``\texttt{12}'' for register ``\texttt{x12}''.
+
+  Also, a copy constructor, copy-assignment operator and a \texttt{clone} method shall be provided (\crefrange{lst:newphregheader7}{lst:newphregheader9}).
+
+  Have this header file included by file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModelregType}physical.cc} implementing this new virtual register according to \cref{lst:newphregimpl}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Physical Register's Class},label=lst:newphregimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+// Destructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP::~Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@( void )@Ü\label{lst:newphregimpl1}Ü
+{};
+
+// Default constructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP::Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@(@ const ästd::stringä æ&æn, bool isSP @) :@ WIR_PhysicalRegister { Ü{\itshape newModel}Ü::RegisterType::Ü{\itshape regType}Ü, n, isSP }Ü\label{lst:newphregimpl2}Ü
+{};
+
+// Copy constructor.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP::Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ&æo @) :@ WIR_PhysicalRegister { o }Ü\label{lst:newphregimpl3}Ü
+{};
+
+// Copy-assignment operator.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ&æ Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP::operator æ=æ @(@ const Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ&æo @)@Ü\label{lst:newphregimpl4}Ü
+{
+  WIR_PhysicalRegister::operator æ=æ @(@ o @)@;
+  return@(@ *this @)@;
+};
+
+// Create a deep copy of a physical register.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP æ*æÜ{\itshape newModel}Ü_Ü{\itshape regType}ÜP::clone@( void )@ constÜ\label{lst:newphregimpl5}Ü
+{
+  return@(@ new Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP@(@ æ*æthis @) )@;
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+  If the newly created register class models hierarchical registers (cf. \cref{sssec:regs}), another private method \texttt{addChilds} needs to be added to \cref{lst:newphregheader,lst:newphregimpl} that takes the required number of physical child registers as arguments and sets up the register hierarchy accordingly.
+  Below, an example for \texttt{addChilds} is given where a physical register hierarchy consisting of two child registers is established: \label{enum:hierphreg}
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+// Add the specified physical register as childs.
+Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜP::addChilds@(@ const WIR_PhysicalRegister æ&æc1, const WIR_PhysicalRegister æ&æc2 @)@
+{
+  pushBackChild@(@ const_castæ<æWIR_PhysicalRegister æ&>æ@(@ c1 @) )@;
+  pushBackChild@(@ const_castæ<æWIR_PhysicalRegister æ&>æ@(@ c2 @) )@;
+};
+\end{lstlisting}
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|physical.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|physical.h| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+
+As soon as all classes for physical registers of all required types have been implemented this way, the processor model from \cref{sec:newprocinit} needs to be extended by all the hardware registers of the new architecture.
+For this purpose, the following steps are required:
+
+\begin{enumerate}[resume]
+  \item Extend the new processor model's constructor from \cref{lst:newprocimpl3} of \cref{lst:newprocimpl} by \texttt{addPhReg} directives (declared in file \texttt{WIR/wir/wirbaseprocessor.h}) for each actual hardware register of each modeled register type.
+  Start by adding non-hierarchical physical registers to the constructor first, as shown in \cref{lst:newphregconstr}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Construction of Physical Registers by a New Processor Model's Class},label=lst:newphregconstr]
+// Default constructor.
+Ü{\itshape newModel}Ü::Ü{\itshape newModel}Ü@( void ) :@ WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ {}
+{
+  setProcessorName@(@ "Ü{\itshape\color{red} some name of the processor architecture}Ü" @)@;
+  setISAName@(@ "Ü{\itshape\color{red} some name of the modeled processor ISA}Ü" @)@;
+
+  // Create physical register bottom-up, i.e., from the leafs upwards to complex hierarchical registers.
+  addPhRegæ<æÜ{\itshape newModel}Ü_Ü{\itshape regType1}Üæ>æ@(@ "Ü{\itshape\color{red} Unique name part of first register of first type}Ü" @)@;Ü\label{lst:newphregconstr1}Ü
+  addPhRegæ<æÜ{\itshape newModel}Ü_Ü{\itshape regType1}Üæ>æ@(@ "Ü{\itshape\color{red} Unique name part of second register of first type}Ü" @)@;Ü\label{lst:newphregconstr2}Ü
+  [...]
+  addPhRegæ<æÜ{\itshape newModel}Ü_Ü{\itshape regType2}Üæ>æ@(@ "Ü{\itshape\color{red} Unique name part of first register of second type}Ü" @)@;Ü\label{lst:newphregconstr3}Ü
+  [...]
+};
+\end{lstlisting}
+
+  When it comes to the addition of the stack pointer register, extend the \texttt{addPhReg} call by a \texttt{true} Boolean flag, e.g., for the RISC-V RV32I architecture from \cref{ssec:rv32model}:
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+addPhRegæ<æRV_RegPæ>æ@(@ "2", true @)@;
+\end{lstlisting}
+
+  \item Next, add public getter methods for all physical registers created so far to the new processor model's class.\label{enum:phreggetters}
+  For this purpose, extend header file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} as shown in \cref{lst:newphregget}.
+
+\begin{lstlisting}[style=code,float=!b,caption={Declaration of Access Methods for Physical Registers},label=lst:newphregget]
+class Ü{\itshape newModel}Ü : public WIR_Processoræ<æÜ{\itshape newModel}Üæ>æ
+{
+  public:
+
+    [...]
+
+    const Ü{\itshape newModel}Ü_Ü{\itshape regType1}ÜP æ&æÜ{\itshape regName1}Ü@( void )@ const;Ü\label{lst:newphregget1}Ü
+    const Ü{\itshape newModel}Ü_Ü{\itshape regType1}ÜP æ&æÜ{\itshape regName2}Ü@( void )@ const;Ü\label{lst:newphregget2}Ü
+    [...]
+    const Ü{\itshape newModel}Ü_Ü{\itshape regType2}ÜP æ&æ [...]
+};
+\end{lstlisting}
+  Here, \texttt{\itshape regName} stands for the unique and complete name of a processor's register according to its \gls{ISA} specification so that these access methods are named exactly as defined by the \gls{ISA} (i.e., the methods for the RISC-V model should be \texttt{x0()} to \texttt{x31()}).
+
+  The realization of these access methods is shown in \cref{lst:newphreggetimpl}.
+  The \texttt{addPhReg} calls from \cref{lst:newphregconstr} store all the newly created physical registers at the tail of some internal \texttt{std::vector} named \texttt{mPhReg\-References}.
+  By using the appropriate numerical indices 0, 1, \dots in \cref{lst:newphreggetimpl}, references to the correct physical registers can be retrieved, dynamically casted to the required result type, and returned (cf. \cref{lst:newphreggetimpl2,lst:newphreggetimpl4}).
+  It is thus a good idea to order the access methods in \cref{lst:newphregget,lst:newphreggetimpl} in exactly the same way as the \texttt{addPhReg} calls so that simply increasing constant indices can be used.
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of Access Methods for Physical Registers},label=lst:newphreggetimpl]
+// Access to first register of first type.
+const Ü{\itshape newModel}Ü_Ü{\itshape regType1}ÜP æ&æÜ{\itshape newModel}Ü::Ü{\itshape regName1}Ü@( void )@ constÜ\label{lst:newphreggetimpl1}Ü
+{
+  return@(@ dynamic_castæ<æÜ{\itshape newModel}Ü_Ü{\itshape regType1}ÜP æ&>æ@(@ mPhRegReferences.at@(@ §0§ @)@.get@() ) );@Ü\label{lst:newphreggetimpl2}Ü
+};
+
+// Access to second register of first type.
+const Ü{\itshape newModel}Ü_Ü{\itshape regType1}ÜP æ&æÜ{\itshape newModel}Ü::Ü{\itshape regName2}Ü@( void )@ constÜ\label{lst:newphreggetimpl3}Ü
+{
+  return@(@ dynamic_castæ<æÜ{\itshape newModel}Ü_Ü{\itshape regType1}ÜP æ&>æ@(@ mPhRegReferences.at@(@ §1§ @)@.get@() ) );@Ü\label{lst:newphreggetimpl4}Ü
+};
+
+[...]
+\end{lstlisting}
+
+  \item Next, hierarchical physical registers consisting of already modeled and implemented child registers need to be created.
+  Their creation inside the new processor model's constructor consists of a combination of \texttt{addPhReg} from \cref{lst:newphregconstr} and \texttt{addChilds} calls from \cref{enum:hierphreg}.
+  The excerpt from the new processor model's constructor below shows the construction of the TriCore model's physical extended register \texttt{E0} (cf. \cref{tab:tcregtypes}) from its child data registers \texttt{D0} and \texttt{D1}:
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+// Create hierarchical physical registers.
+addPhRegæ<æTC_ERegPæ>æ@(@ "0" @)@;
+dynamic_castæ<æTC_ERegP æ&>æ@(@ mPhRegReferences.back@()@.get@() )@.addChilds@(@ D0@()@, D1@() )@;
+\end{lstlisting}
+
+  As can be seen, a new physical register of appropriate type is created first using \texttt{addPhReg} so that this new register shows up at the tail of vector \texttt{mPhRegReferences}.
+  This tail is then retrieved and casted to the correct register class so that its \texttt{addChilds} method can be invoked, taking the references to two child registers provided by the appropriate getter methods from \cref{enum:phreggetters} as arguments.
+
+  \item Finally, the physical hierarchical registers established during the previous step need to be supported by their dedicated getter methods in analogy to \cref{enum:phreggetters}.
+\end{enumerate}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Immediates}
+\label{ssec:newimmediates}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+This section describes how to add all the required classes of immediate parameters for some \gls{ISA} to a new processor's model.
+For this purpose, a careful analysis of an architecture's \gls{ISA} specification is required.
+For each individual machine operation of some actual architecture, all the possibly involved immediates, their bit widths, their signedness, and any other specific properties should be extracted from the specifications and noted elsewhere.
+\begin{wirNote}
+Let \texttt{\itshape bitWidth} denote the bit width of some immediate value.
+\end{wirNote}
+Hereafter, the \gls{WIR} processor model can be extended by tailored immediate classes as follows:
+
+\begin{enumerate}[resume]
+  \item For each identified signed immediate parameter, create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}const\-{\itshape bitWidth}signed.h} following the structure shown in \cref{lst:newsimmheader}.\label{enum:newsimmhead}
+  The default constructor without arguments is disabled, signed immediates can only be created by explicitly passing a signed value to the constructor from \cref{lst:newsimmheader3}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Signed Immediate Parameter's Class},label=lst:newsimmheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_CONSTÜ{\itshape\color{darkgreen} bitWidth}Ü_SIGNED_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_CONSTÜ{\itshape\color{darkgreen} bitWidth}Ü_SIGNED_H^
+
+// Include WIR headers
+^#include^ §<wir/wirsignedimmediateparameter.h>§
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed final : public WIR_SignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signedæ>æÜ\label{lst:newsimmheader1}Ü
+{
+  public:
+
+    // No standard construction allowed, only the below default constructor may be used.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@( void )@ æ=æ delete;Ü\label{lst:newsimmheader2}Ü
+
+    // Default constructor.
+    explicit Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@( signed long long@ v @)@;Ü\label{lst:newsimmheader3}Ü
+
+    // Copy constructor.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æo @)@;Ü\label{lst:newsimmheader4}Ü
+
+    // Move constructor.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&&æo @)@;Ü\label{lst:newsimmheader5}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@( void )@;Ü\label{lst:newsimmheader6}Ü
+
+    // Copy-assignment operator.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æ operator æ=æ @(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æo @)@;Ü\label{lst:newsimmheader7}Ü
+
+    // Move-assignment operator.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æ operator æ=æ @(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&&æo @)@;Ü\label{lst:newsimmheader8}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  Other than that, only the usual copy/move constructors and assignment operators as well as the virtual destructor need to be provided.
+
+  Have this header file included by file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}const\-{\itshape bitWidth}signed.cc} implementing this new virtual register according to \cref{lst:newsimmimpl}.\label{enum:newsimmimpl}
+  The only noteworthy point here is that the immediate's actual bit width is passed as integer argument to the constructor of base class \texttt{WIR\_SignedImmediateParameter} in \cref{lst:newsimmimpl1}.
+  This way, the \gls{WIR} library is able to ensure that any actual signed value \texttt{v} used to construct an immediate parameter lies in the range of values that can be represented with \texttt{\itshape bitWidth} bits, assuming a two's-complement representation.
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Signed Immediate Parameter's Class},label=lst:newsimmimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+// Default constructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed::Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@( signed long long@ v @) :@ WIR_SignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signedæ>æ { v, Ü{\itshape bitWidth}Ü }Ü\label{lst:newsimmimpl1}Ü
+{};
+
+// Copy constructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed::Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æo @) :@ WIR_SignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signedæ>æ { o }Ü\label{lst:newsimmimpl2}Ü
+{};
+
+// Move constructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed::Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&&æo @) :@ WIR_SignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signedæ>æ { ästd::moveä@(@ o @)@ }Ü\label{lst:newsimmimpl3}Ü
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed::~Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed@( void )@Ü\label{lst:newsimmimpl4}Ü
+{};
+
+// Copy-assignment operator.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed::operator æ=æ @(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æo @)@Ü\label{lst:newsimmimpl5}Ü
+{
+  WIR_SignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signedæ>æ::operator æ=æ @(@ o @)@;
+  return@(@ *this @)@;
+};
+
+// Move-assignment operator.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&æ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed::operator æ=æ @(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signed æ&&æo @)@Ü\label{lst:newsimmimpl6}Ü
+{
+  WIR_SignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Signedæ>æ::operator æ=æ @(@ ästd::moveä@(@ o @) )@;
+  return@(@ *this @)@;
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item Add\label{enum:newsimmmake} \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|const|\texttt{\itshape bitWidth}\verb|signed.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|const|\texttt{\itshape bitWidth}-\\
+  \verb|  signed.h| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+
+  \item For each identified unsigned immediate parameter, perform \crefrange{enum:newsimmhead}{enum:newsimmmake} analogously, but based on the code shown in \cref{lst:newusimmheader,lst:newusimmimpl}.
+  The constructor realized in \cref{lst:newusimmimpl1} of \cref{lst:newusimmimpl} assumes a value range from 0 to 2$^{\texttt{\itshape bitWidth}-1}$ for unsigned values \texttt{v} used to construct an unsigned immediate.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Unsigned Immediate Parameter's Class},label=lst:newusimmheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_CONSTÜ{\itshape\color{darkgreen} bitWidth}Ü_UNSIGNED_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_CONSTÜ{\itshape\color{darkgreen} bitWidth}Ü_UNSIGNED_H^
+
+// Include WIR headers
+^#include^ §<wir/wirunsignedimmediateparameter.h>§
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned final : public WIR_UnsignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsignedæ>æÜ\label{lst:newusimmheader1}Ü
+{
+  public:
+
+    // No standard construction allowed, only the below default constructor may be used.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@( void )@ æ=æ delete;Ü\label{lst:newusimmheader2}Ü
+
+    // Default constructor.
+    explicit Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@( unsigned long long@ v @)@;Ü\label{lst:newusimmheader3}Ü
+
+    // Copy constructor.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æo @)@;Ü\label{lst:newusimmheader4}Ü
+
+    // Move constructor.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&&æo @)@;Ü\label{lst:newusimmheader5}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@( void )@;Ü\label{lst:newusimmheader6}Ü
+
+    // Copy-assignment operator.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æ operator æ=æ @(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æo @)@;Ü\label{lst:newusimmheader7}Ü
+
+    // Move-assignment operator.
+    Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æ operator æ=æ @(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&&æo @)@;Ü\label{lst:newusimmheader8}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  \item If required by the architecture's \gls{ISA}, additional constraints on the value range accepted by the constructors can be added by extending the body of the constructor from \cref{lst:newusimmimpl2} of \cref{lst:newusimmimpl} with specific assertions.\label{enum:immconstr}
+  For example, \glspl{ISA} sometimes require that certain immediates used for particular machine operations have to be non-zero, or that immediates need to be multiples of 4.
+  Such behavior can be enforced as follows:
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+{
+  // Body of an immediate's default constructor.
+  ufAssert( v != §0§ );
+  ufAssert( v % §4§ == §0§ );
+}
+\end{lstlisting}
+\end{enumerate}
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Unsigned Immediate Parameter's Class},label=lst:newusimmimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+// Default constructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned::Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@( unsigned long long@ v @) :@ WIR_UnsignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsignedæ>æ { v, Ü{\itshape bitWidth}Ü }Ü\label{lst:newusimmimpl1}Ü
+{};Ü\label{lst:newusimmimpl2}Ü
+
+// Copy constructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned::Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æo @) :@ WIR_UnsignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsignedæ>æ { o }Ü\label{lst:newusimmimpl3}Ü
+{};
+
+// Move constructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned::Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&&æo @) :@ WIR_UnsignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsignedæ>æ { ästd::moveä@(@ o @)@ }Ü\label{lst:newusimmimpl4}Ü
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned::~Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned@( void )@Ü\label{lst:newusimmimpl5}Ü
+{};
+
+// Copy-assignment operator.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsgned::operator æ=æ @(@ const Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æo @)@Ü\label{lst:newusimmimpl6}Ü
+{
+  WIR_UnsignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsignedæ>æ::operator æ=æ @(@ o @)@;
+  return@(@ *this @)@;
+};
+
+// Move-assignment operator.
+Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&æ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned::operator æ=æ @(@ Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned æ&&æo @)@Ü\label{lst:newusimmimpl7}Ü
+{
+  WIR_UnsignedImmediateParameteræ<æÜ{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsignedæ>æ::operator æ=æ @(@ ästd::moveä@(@ o @) )@;
+  return@(@ *this @)@;
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+As motivated in \cref{chap:codegen}, \gls{WIR} is designed to model assembly code with the purpose to generate actual code for further processing by subsequent assembler tools.
+However, \gls{ISA} specifications that serve as the basis for the modelling of immediate parameters regularly refer to an architecture's binary executable interface, and not to some assembly-level interface.
+This can sometimes lead to the situation that an assembler for some architecture accepts different immediate parameters for some machine operation as originally specified by the \gls{ISA}.
+\begin{wirExample}
+According to  the RISC-V RV32IC \gls{ISA}~\cite{riscv17}, the operation \texttt{C.ADDI16SP} requires a non-zero 6-bits immediate, and this immediate is processor-internally scaled to represent multiples of 16.
+This internal scaling is done by left-shifting the 6-bits immediate by 4 bits, effectively widening the immediate from 6 bits to 10 bits.
+
+However, the RISC-V GNU assembler \texttt{riscv32-unknown-elf-as} does not accept arbitrary non-zero immediates of 6 bits width as parameter for \texttt{C.ADDI16SP}.
+Instead, the assembler expects the immediate to be already scaled up to 10 bits while being multiples of 16.
+\end{wirExample}
+The above example shows that \gls{ISA} documents and assemblers can differ in the handling of certain immediate parameters.
+This implies that care needs to be taken during the design of immediate classes for a newly modeled architecture within \gls{WIR}.
+Depending on the intended use of a new \gls{WIR} processor model, immediates might be realized according to a machine's \gls{ISA}, or according to the capabilities of some particular assembler tool.
+
+\begin{lstlisting}[style=code,float=t,caption={Declaration of a New Processor Model's Condition Fields},label=lst:newconds]
+class Ü{\itshape newModel}Ü : public Ü{\itshape baseClass}Ü
+{
+  public:
+
+    [...]
+
+    class Condition : public Ü{\itshape baseClass}Ü::ConditionÜ\label{lst:newconds1}Ü
+    {
+      public:
+
+        static const Condition Ü{\itshape cond1}Ü;Ü\label{lst:newconds2}Ü
+
+        static const Condition Ü{\itshape cond2}Ü;Ü\label{lst:newconds3}Ü
+
+        [...]
+
+      protected:
+
+        // Inherit the constructors from the base class.
+        using Ü{\itshape baseClass}Ü::Condition::Condition;Ü\label{lst:newconds4}Ü
+    };
+
+    [...]
+};
+\end{lstlisting}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Addressing Modes}
+\label{ssec:newamodes}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+The modelling of an \gls{ISA}'s addressing modes within \gls{WIR} follows the very same pattern as already introduced for register types in \cref{ssec:newregtypes}:
+\begin{enumerate}[resume]
+  \item Edit file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} and extend the new class by a novel, public class \texttt{Addressing\-Mode} that inherits from \texttt{{\itshape baseClass}::AddressingMode}.
+  For all addressing modes to be modeled within \gls{WIR} for the new architecture, add a new member declaration to class \texttt{AddressingMode}.\label{enum:newaddrmode}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}addressingmodes.cc} and provide a dedicated instance per addressing mode declared in \cref{enum:newaddrmode}.
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|addressingmodes.cc| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+For the sake of brevity, we omit detailed listings here and simply refer to \cref{sssec:amodes} and \cref{lst:tcadrmode}.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Condition Fields}
+\label{ssec:newcond}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Processor Model's Condition Fields},label=lst:newcondsimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+const Ü{\itshape newModel}Ü::Condition Ü{\itshape newModel}Ü::Condition::Ü{\itshape cond1}Ü { "Ü{\itshape\color{red} conditionAcronym1}Ü" };Ü\label{lst:newcondsimpl1}Ü
+const Ü{\itshape newModel}Ü::Condition Ü{\itshape newModel}Ü::Condition::Ü{\itshape cond2}Ü { "Ü{\itshape\color{red} conditionAcronym2}Ü" };Ü\label{lst:newcondsimpl2}Ü
+
+[...]
+
+}       // namespace WIR
+\end{lstlisting}
+
+The modelling of an \gls{ISA}'s condition fields within \gls{WIR} follows the very same pattern as already introduced for register types or addressing modes in \cref{ssec:newregtypes,ssec:newamodes}:
+\begin{enumerate}[resume]
+  \item Edit file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} and extend the new class by a novel, public class \texttt{Condition} that inherits from \texttt{{\itshape baseClass}::Condition} (cf. \cref{lst:newconds}).
+  For all condition fields to be modeled within \gls{WIR} for the new architecture, add a new member declaration to class \texttt{Condition}.\label{enum:newcond}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}conditions.cc} and provide a dedicated instance per condition declared in \cref{enum:newcond} (cf. \cref{lst:newcondsimpl}).
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|conditions.cc| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Opcodes}
+\label{ssec:newopcodes}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\begin{lstlisting}[style=code,float=t,caption={Declaration of a New Processor Model's OpCodes},label=lst:newopcodes]
+class Ü{\itshape newModel}Ü : public Ü{\itshape baseClass}Ü
+{
+  public:
+
+    [...]
+
+    class OpCode : public Ü{\itshape baseClass}Ü::OpCodeÜ\label{lst:newopcodes1}Ü
+    {
+      public:
+
+        static const OpCode Ü{\itshape opCode1}Ü;Ü\label{lst:newopcodes2}Ü
+
+        static const OpCode Ü{\itshape opCode2}Ü;Ü\label{lst:newopcodes3}Ü
+
+        [...]
+
+      protected:
+
+        // Inherit the constructors from the base class.
+        using Ü{\itshape baseClass}Ü::OpCode::OpCode;Ü\label{lst:newopcodes4}Ü
+    };
+
+    [...]
+};
+\end{lstlisting}
+
+After register types, registers, immediates and other types of parameters for a new processor model have been realized according to the previous sections, the next steps center around the specification of an \gls{ISA}'s opcodes within the \gls{WIR} library.
+Once again, this requires a careful analysis of the architecture's \gls{ISA} specification in order to understand which operations are native machine operations directly realized by the hardware, or which other operations are just pseudo-operations that boil down to specific flavors of native machine operations.
+\begin{wirNote}
+It is strongly recommended to specify all native machine operations as \gls{WIR} opcodes, and to keep the amount of pseudo-opcodes within \gls{WIR} at an absolute minimum.\label{note:pseudoops}
+Whenever possible, make the use of a processor's native opcodes explicit and avoid the introduction and usage of pseudo-opcodes in general.
+
+The only exception of this rule of thumb are pseudo-opcodes that help the various \gls{WIR} analyses (cf. \cref{chap:analysis}) to better understand certain code properties.
+Prime examples here are control flow operations realizing branches or function calls/returns, or operations used for register-register moves.
+If an \gls{ISA} does not feature dedicated native opcodes for these purposes, it is definitely recommended to introduce a few pseudo-opcodes.
+\end{wirNote}
+
+The following steps describe how to extend the new architecture's model by types of different registers.
+\begin{enumerate}[resume]
+  \item Edit file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} and extend the new class by a novel, public class \texttt{OpCode} that inherits from \texttt{{\itshape baseClass}::OpCode} (cf. \cref{lst:newopcodes}).
+  For all identified opcodes that shall be modeled within \gls{WIR} for the new architecture, add a new member declaration to class \texttt{OpCode} as shown in \cref{lst:newopcodes2,lst:newopcodes3}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}opcodes.cc} according to the structure depicted in \cref{lst:newopcodesimpl}.
+  For each opcode declared in \cref{lst:newopcodes}, a dedicated instance needs to be provided as shown in \cref{lst:newopcodesimpl1,lst:newopcodesimpl2} of \cref{lst:newopcodesimpl}.
+  Ensure that the constructor of class \texttt{OpCode} is called with the proper mnemonic string, as well as -- if applicable -- with the proper opcode classification(s) according to \cref{lst:opctypes}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Processor Model's Opcodes},label=lst:newopcodesimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+const Ü{\itshape newModel}Ü::OpCode Ü{\itshape newModel}Ü::OpCode::Ü{\itshape opCode1}Ü { "Ü{\itshape\color{red} mnemonic1}Ü" Ü{\itshape\color{gray} [.{}.{}.]}Ü };Ü\label{lst:newopcodesimpl1}Ü
+const Ü{\itshape newModel}Ü::OpCode Ü{\itshape newModel}Ü::OpCode::Ü{\itshape opCode2}Ü { "Ü{\itshape\color{red} mnemonic2}Ü" Ü{\itshape\color{gray} [.{}.{}.]}Ü };Ü\label{lst:newopcodesimpl2}Ü
+
+[...]
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|opcodes.cc| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+\end{enumerate}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Operation Formats}
+\label{ssec:newopformats}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+The following steps describe how to specify the operation formats (cf. \cref{sssec:opformats}) required to model a new \gls{ISA}.
+For this purpose, a common naming scheme should be defined that will then be used to create the acronyms of all required operation formats such that it becomes evident which kinds of parameters, registers, immediates etc. an operation of a certain format expects.
+\begin{enumerate}[resume]
+  \item Edit file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} and extend the new class by a novel, public class \texttt{Operation\-Format} that inherits from \texttt{{\itshape baseClass}::OperationFormat} (cf. \cref{lst:newopformats}). \label{enum:newopformat}
+  For all identified formats that shall be modeled within \gls{WIR} for the new architecture, add a new member declaration to class \texttt{Operation\-Format} as shown in \cref{lst:newopformats2,lst:newopformats3}.
+
+\begin{lstlisting}[style=code,float=!b,caption={Declaration of a New Processor Model's Operation Formats},label=lst:newopformats]
+class Ü{\itshape newModel}Ü : public Ü{\itshape baseClass}Ü
+{
+  public:
+
+    [...]
+
+    class OperationFormat : public Ü{\itshape baseClass}Ü::OperationFormatÜ\label{lst:newopformats1}Ü
+    {
+      public:
+
+        static const OperationFormat Ü{\itshape formatAcronym1}Ü;Ü\label{lst:newopformats2}Ü
+
+        static const OperationFormat Ü{\itshape formatAcronym2}Ü;Ü\label{lst:newopformats3}Ü
+
+        [...]
+
+      protected:
+
+        // Inherit the constructors from the base class.
+        using Ü{\itshape baseClass}Ü::OperationFormat::OperationFormat;Ü\label{lst:newopformats4}Ü
+    };
+
+    [...]
+};
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}operationformats.cc} according to the structure depicted in \cref{lst:newopformatsimpl}.
+  For each format declared in \cref{lst:newopformats}, a dedicated instance needs to be provided as shown in \cref{lst:newopformatsimpl1,lst:newopformatsimpl2} of \cref{lst:newopformatsimpl}.
+  Ensure that the constructor of class \texttt{OperationFormat} is called with the proper bit width of the format as well as with a string containing the format's acronym that is used for \gls{WIR} code dumps.
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|operationformats.cc| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+  \item Next, the structure of all implemented operation formats needs to be registered, i.e., their number of parameters and the different kinds of parameters in their specific order according to the new architecture's \gls{ISA}.
+  For this purpose, the new model's \texttt{init} method from \cref{lst:newinit} needs to be extended by calls of the global \gls{WIR} registry in analogy to \cref{lst:tcopfreg}.
+
+\begin{lstlisting}[style=code,float=t,caption={Implementation of a New Processor Model's Operation Formats},label=lst:newopformatsimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+const Ü{\itshape newModel}Ü::OperationFormat Ü{\itshape newModel}Ü::OperationFormat::Ü{\itshape formatAcronym1}Ü { Ü{\itshape\color{orange} bitwidth1}Ü, "Ü{\itshape\color{red} formatAcronym1}Ü" };Ü\label{lst:newopformatsimpl1}Ü
+const Ü{\itshape newModel}Ü::OperationFormat Ü{\itshape newModel}Ü::OperationFormat::Ü{\itshape formatAcronym2}Ü { Ü{\itshape\color{orange} bitwidth2}Ü, "Ü{\itshape\color{red} formatAcronym2}Ü" };Ü\label{lst:newopformatsimpl2}Ü
+
+[...]
+
+}       // namespace WIR
+\end{lstlisting}
+
+  Edit the \texttt{init} method in file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.cc} and create virtual registers of the various types realized in \cref{ssec:newregtypes} (cf. \cref{lst:newformatregister1} of \cref{lst:newformatregister}).
+
+\begin{lstlisting}[style=code,float=!b,caption={Operation Format Registration in a New Processor Model's \texttt{init} Method},label=lst:newformatregister]
+// Globally initialize a processor model.
+@void@ Ü{\itshape newModel}Ü::init@( void )@
+{
+  [...]
+
+  // Register operation formats.
+  const auto *Ü{\itshape reg1}Ü = new Ü{\itshape newModel\_childRegType}ÜV;Ü\label{lst:newformatregister1}Ü
+  const auto *Ü{\itshape reg2}Ü = new Ü{\itshape newModel\_childRegType}ÜP@(@ "5" @)@;Ü\label{lst:newformatregister2}Ü
+  [...]
+
+  registerOperationFormat@(@ OperationFormat::Ü{\itshape formatAcronym1}Ü, { new Ü{\itshape param1}Ü, new Ü{\itshape param2}Ü, Ü{\itshape\color{gray} [.{}.{}.]}Ü } @)@;Ü\label{lst:newformatregister3}Ü
+  registerOperationFormat@(@ OperationFormat::Ü{\itshape formatAcronym2}Ü, { Ü{\itshape\color{gray} [.{}.{}.]}Ü } @)@;Ü\label{lst:newformatregister4}Ü
+
+  [...]
+
+  // Register opcode to operation format mappings.
+  registerOpCode@(@ OpCode::Ü{\itshape opCode1}Ü, OperationFormat:::Ü{\itshape formatAcronymX}Ü @)@;Ü\label{lst:newformatregister5}Ü
+  registerOpCode@(@ OpCode::Ü{\itshape opCode2}Ü, OperationFormat:::Ü{\itshape formatAcronymY}Ü @)@;Ü\label{lst:newformatregister6}Ü
+
+  [...]
+};
+\end{lstlisting}
+  For each operation format declared in \cref{enum:newopformat}, add a call to \texttt{register\-OperationFormat} afterwards (\cref{lst:newformatregister3,lst:newformatregister4}).
+  Pay attention that the exact amount of register, immediate or other parameters is provided to \texttt{registerOperationFormat} in exactly that order in which the \gls{ISA} specification expects them.
+  For register parameters, ensure that their usage characteristics (cf. type \texttt{WIR\_Usage} from \cref{lst:regparamconstruction}) are correctly registered.
+  If an operation format of the \gls{ISA} supports any register of a particular type as parameter, use a virtual register of that type here.
+  Otherwise, if an operation format requires a very specific processor register only as parameter (e.g., the architecture's stack pointer), create an instance of that particular physical register first (\cref{lst:newformatregister2}) and then use this physical register for \texttt{registerOperationFormat}.
+
+  A concrete example of this operation format registration for the TriCore \texttt{TC13} architecture was given in \cref{lst:tcopfreg} on \cpageref{lst:tcopfreg}.
+
+  \item Finally, specify which opcodes can have which operation formats by adding corresponding \texttt{registerOpCode} directives to the very same \texttt{init} method as shown in \cref{lst:newformatregister5,lst:newformatregister6}.
+\end{enumerate}
+
+
+%-------------------------------------------------------------------------
+\section{Realization of Processor-Specific Code Generation Mechanisms}
+\label{sec:newio}
+%-------------------------------------------------------------------------
+
+According to \cref{sec:asmcode}, \gls{WIR} provides a flexible concept to generate valid processor-specific assembly code.
+When a new processor architecture is modeled within \gls{WIR}, these code generation mechanisms thus need to be adapted accordingly, which is described in the following steps.
+
+\begin{enumerate}[resume]
+  \item \cref{tab:procmanip} on \cpageref{tab:procmanip} presented all processor-specific stream manipulators that have to be used in order to switch the code generated by \gls{WIR} to a desired processor architecture.
+  Consequently, a stream manipulator needs to be added for the newly modeled processor architecture.
+
+  Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}io.h} according to the general structure depicted in \cref{lst:newprocioheader}.
+  This new header file initially only comes with the two required \texttt{include} directives from \cref{lst:newprocioheader1,lst:newprocioheader2} and the declaration of the new stream manipulator from \cref{lst:newprocioheader3}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Header File for a New Processor Model's Stream Output},label=lst:newprocioheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_IO_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_IO_H^
+
+// Include standard headers
+^#include^ §<iostream>§Ü\label{lst:newprocioheader1}Ü
+
+// Include WIR headers
+^#include^ §<wir/wirtypes.h>§Ü\label{lst:newprocioheader2}Ü
+
+namespace WIR {
+
+// Class forward declarations
+
+// Processor-specific stream manipulator.
+ästd::ostreamä æ&æÜ{\itshape newModel}Ü@(@ ästd::ostreamä æ&æos @)@;Ü\label{lst:newprocioheader3}Ü
+
+// Processor-specific dumper functions
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}io.cc} according to the general structure depicted in \cref{lst:newprocioimpl}.
+  The implementation of the stream manipulator (cf. \cref{lst:newprocioimpl2}) simply sets an output stream's \texttt{WIR\_ProcessorIO} property to the unique ID of the new processor model.
+  This ID is internally created and managed by the \gls{WIR} library so that output streams invoke the correct dumper functions for the processor model associated with the given ID.
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|io.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|io.h| \\
+  to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+
+\begin{lstlisting}[style=code,float=t,caption={Rudimentary Implementation of a New Processor Model's Stream Output},label=lst:newprocioimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§Ü\label{lst:newprocioimpl1}Ü
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+namespace WIR {
+
+// Processor-specific stream manipulator.
+ästd::ostreamä æ&æÜ{\itshape newModel}Ü@(@ ästd::ostreamä æ&æos @)@Ü\label{lst:newprocioimpl2}Ü
+{
+  os.iword@(@ WIR_ProcessorIO@() )@ æ=æ Ü{\itshape newModel}Ü::getProcessorTypeID@()@;Ü\label{lst:newprocioimpl3}Ü
+  return@(@ os @)@;
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item Next, processor-specific dumper functions for individual components of the \gls{WIR} software model need to be realized.\label{enum:dumperdecl}
+  These dumper functions must have a type as declared in file \texttt{WIR/wir/wirio.h}, see \cref{lst:iodumper} as an example of a basic block dumper's type.
+
+  Extend file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}io.h} by the declarations of all processor-specific dumpers that need to be tailored for the newly modeled processor architecture.
+  \cref{lst:rvdumper} shows the declaration of a RISC-V-specific basic block dumper.
+  The naming scheme of all these dumpers should follow the pattern \texttt{dump{\itshape newModelComponent}} where \texttt{\itshape Component} denotes the \gls{WIR} component to be dumped in a processor-specific manner (e.g., \texttt{BasicBlock} or \texttt{Operation}).
+
+  \item Implement each dumper function declared in \cref{enum:dumperdecl} by extending file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}\-io.cc}.
+  Since this retargeting guide cannot cover all issues that are potentially raised during code generation for some particular architecture, we refrain from giving code examples of some dumpers' implementations here.
+
+  Regularly, the dumpers for \gls{WIR} basic blocks, comments, data objects and operations need to be tailored in a processor-specific way.
+  Correctly generated code for basic blocks and data objects usually requires to print out \texttt{.section} directives in front of the actual code whenever the previous basic block/data object was allocated to some different section.
+  The correct formatting of comments attached to \gls{WIR} objects such that they are accepted by a subsequent assembler is another typical task to be realized here.
+  Most importantly, processor-specific operation dumpers are frequently required in order to output pseudo-operations (cf. \cpageref{note:pseudoops}) in the form of correct native machine operations.
+
+  For concrete examples of implementations of various dumper functions, the reader is referred to files \texttt{WIR/arch/riscv/rvio.cc} or \texttt{WIR/arch/tricore/tcio.cc}.
+
+  \item Finally, all the dumpers declared in \cref{enum:dumperdecl} need to be registered under the unique ID of the new processor model.
+
+  Edit the \texttt{init} method in file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.cc} and add calls to the appropriate \texttt{regis\-ter{\itshape Component}Dumper} methods as already depicted earlier in \cref{lst:rvdumpreg}.
+  The complete specifications of these registration methods can be found in file \texttt{WIR/wir/wirbaseprocessor.h}.
+\end{enumerate}
+
+
+%-------------------------------------------------------------------------
+\section{Setup of New System Configurations}
+\label{sec:newsys}
+%-------------------------------------------------------------------------
+
+As discussed in \cref{sec:sysconfig}, \gls{WIR} uses system configuration files in order to instantiate hardware components with specific properties and compose them to form a complete system.
+When it comes to retargeting \gls{WIR} to a new processor architecture, it is thus necessary to provide at least one new such configuration file that instantiates and uses the new processor model created so far.
+
+\begin{wirNote}
+At this point, the name \texttt{\itshape newModel} of the actual \gls{ISA} that has been modeled so far needs to be distinguished from the name of some actual system that bases on the modeled \gls{ISA} but adds a variety of other hardware components.
+
+Let \texttt{\itshape newSystem} thus be a speaking name for the actual sytem to be modeled.
+\end{wirNote}
+
+The setup of a new system configuration file and its integration into the \gls{WIR} infrastructure is described in the following steps.
+
+\begin{enumerate}[resume]
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newSystem}.sys} according to the general structure shown in \cref{lst:newSysCfg}.
+  This file first specifies that new systems will carry the name \texttt{\itshape newSystem} in \cref{lst:newSysCfg1,lst:newSysCfg2}.
+
+  The more relevant part, however, is the specification of the new system's processor core given in \crefrange{lst:newSysCfg3}{lst:newSysCfg4}.
+  In \cref{lst:newSysCfg4}, it is important to specify exactly that name that has previously been given to the \gls{ISA} using \texttt{setISAName}, cf. \cref{lst:newprocimpl5} of \cref{lst:newprocimpl} on \cpageref{lst:newprocimpl}.
+  This way, whenever this system configuration file is used to construct a \gls{WIR} system, a processor core with the newly implemented \gls{ISA} model gets instantiated.
+
+\begin{lstlisting}[style=commandline,float=t!,caption={Rudimentary System Configuration File},label=lst:newSysCfg]
+#
+# System specification of the newModel implementation newSystem.
+#
+|[Ü{\itshape\color{blue} newSystem}Ü]|Ü\label{lst:newSysCfg1}Ü
+type               = systemÜ\label{lst:newSysCfg2}Ü
+
+#
+# Processor Core (ISA newModel)
+#
+|[CORE0]|Ü\label{lst:newSysCfg3}Ü
+type               = core
+isa                = Ü{\itshape ISA name}ÜÜ\label{lst:newSysCfg4}Ü
+\end{lstlisting}
+
+  \item Add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newSystem}\verb|.sys| \\
+  to the \texttt{{\itshape archDir}sysconf\_DATA} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+
+  \item Add \\
+  \verb|  |\texttt{\itshape newSystem}\verb|.sys| \\
+  to the \texttt{EXTRA\_DIST} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.am}.
+
+  \item Add more paragraphs and \textit{<key> = <value>} directives to file \texttt{WIR/arch/{\itshape archDir}/{\itshape newSystem}.sys} in order to specify more components and properties of the actual system to be modeled, see also \cref{tab:sysconf1,tab:sysconf2} for more details.
+\end{enumerate}
+
+
+%-------------------------------------------------------------------------
+\section{Implementation of Unit Tests}
+\label{sec:newtests}
+%-------------------------------------------------------------------------
+
+While the procedures described in this chapter up to this point are sufficient to realize a novel and fully operational system and \gls{ISA} model within \gls{WIR}, it is best practice to furthermore add unit tests that validate all critical properties of all new classes and models (cf. \cref{lst:tests} on \cpageref{lst:tests}).
+For this purpose, a dedicated folder needs to be set up and integrated into the build infrastructure first:
+
+\begin{enumerate}[resume]
+  \item Change into the \texttt{arch/{\itshape archDir}} sub-directory of the \gls{WIR} software package and create a new directory therein with the name \texttt{tests}.
+
+  \item Add \\
+  \verb|  |\texttt{tests} \\
+  to the \texttt{SUBDIRS} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.am}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/tests/Makefile.am} with the contents shown in \cref{lst:testMakefile}.
+
+  \item Add a new line \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/tests/Makefile| \\
+  to the \texttt{AC\_CONFIG\_FILES} directive at the very end of file \texttt{WIR/configure.ac} in the top-level directory of the whole \gls{WIR} software package.
+
+\begin{lstlisting}[style=commandline,float=t,caption={Rudimentary Makefile for Unit Tests},label=lst:testMakefile]
+# Unit tests to be executed
+check_PROGRAMS         =
+
+failscripts            =
+passscripts            =
+
+check_SCRIPTS          = $(failscripts) $(passscripts)
+
+XFAIL_TESTS            = $(failscripts)
+TESTS                  = $(passscripts) $(failscripts)
+
+# Source files and build flags
+CLEANFILES             = $(check_PROGRAMS) $(check_SCRIPTS) \
+                         a.out core
+AM_DEFAULT_SOURCE_EXT  = .cc
+LDADD                  = $(top_builddir)/libwir.la \
+                         Ü@ÜLIBUSEFUL_PREFIXÜ@Ü/libuseful/libuseful.la
+
+# Specific rules
+$(check_SCRIPTS): \
+        %.sh: %.bin
+        Ü@Üecho "Ü\#Ü!"$(BASH) > $Ü@Ü;
+        Ü@Üecho $(builddir)"/$< > /dev/null 2>&1" >> $Ü@Ü;
+        Ü@Üecho "exit ""$$""?" >> $Ü@Ü;
+        Ü@Ü$(CHMOD) ugo+x $Ü@Ü
+\end{lstlisting}
+
+  \item For each virtual register class implemented along the lines of \cref{lst:newvregheader,lst:newvregimpl}, create a new unit test \texttt{WIR/arch/{\itshape archDir}/tests/{\itshape newModelregType}.cc}.\label{enum:vregTest}
+  Purpose of this kind of tests is to verify the virtual registers' base properties (e.g., register type, bit width, the fact that it is virtual and not physical, register name), as well as to ensure that all constructors (default, copy, move) and assignment operators behave as expected.
+
+  For this purpose, the new unit test needs to create a new virtual register of a given type first.
+  Using a series of assertions, the abovementioned properties are verified for this virtual register.
+
+  Next, various other virtual registers of the same type are created using the copy/move constructors and assignment operators.
+  For all these other registers, their properties are again checked using assertions.
+  Obviously, all these assertions must hold so that the entire unit test finally passes successfully.
+
+  A representative code example for this kind of unit tests can be found in file \texttt{WIR/arch/riscv/tests/ rvReg1.cc}.
+
+  \item For each unit test created in the previous step that is expected to pass, add a new line\label{enum:passUnitTest} \\
+  \verb|  |\texttt{{\itshape newModelregType}.bin} \\
+  to the \texttt{check\_PROGRAMS} directive of file \texttt{arch/{\itshape archDir}/tests/Makefile.am}, and a new line \\
+  \verb|  |\texttt{{\itshape newModelregType}.sh} \\
+  to the \texttt{passscripts} directive of the very same Makefile.
+
+  \item For the new processor model (cf. \cref{lst:newprocheader,lst:newprocimpl}), create a unit test \texttt{WIR/arch/{\itshape archDir}/tests/ {\itshape newModel}PhRegs.cc} that aims to assert the existence and properties of all physical registers.
+
+  This test first creates an object of the new processor model's class.
+  Next, it uses all the access methods from \cref{lst:newphregget} to check the correctness of all physical registers' names, whether they definitely are physical registers only, that they all have the correct register types and bit widths etc.
+  All assertions placed in the code must hold in order to successfully pass.
+
+  Sample code for this kind of unit test is given in file \texttt{WIR/arch/riscv/tests/rvPhRegs1.cc}.
+  Add these tests expected to pass to the \gls{WIR} build infrastructure as described in \cref{enum:passUnitTest}.
+
+  \item For each new immediate parameter class (cf. \crefrange{lst:newsimmheader}{lst:newusimmimpl}), create a new unit test \texttt{WIR/arch/ {\itshape archDir}/tests/{\itshape newModel}Const{\itshape bitWidthSignedness}1.cc}.
+  Motivation of this kind of unit tests is to ensure the correct modelling and implementation of immediates.
+
+  Such a test first creates some immediates of a given bit width and signedness using constants that lie in the immediate's value range.
+  Assertions are again applied next to validate these immediates' types, values, bit widths, signedness etc.
+  In analogy to \cref{enum:vregTest}, these immediate parameters are next duplicated using their copy/move constructors and operators, and the duplicates' properties are again checked using assertions.
+  Finally, the smallest and largest possible values of the valid value range are used to construct some more immediate parameters.
+  This ensures that the entire value range is correctly covered and supported by some implemented immediate class.
+
+  A typical example for this kind of tests is \texttt{WIR/arch/riscv/tests/rvConst12Signed1.cc}.
+  Obviously, these tests are expected to pass so that they need to be integrated into the build infrastructure according to \cref{enum:passUnitTest}.
+
+  \item In addition to the previous step, at least two more tests \texttt{WIR/arch/{\itshape archDir}/tests/{\itshape newModel}Const\-{\itshape bitWidthSignedness}2.cc} and \texttt{{\itshape newModel}Const{\itshape bitWidthSignedness}3.cc} should be provided per immediate class that are all expected to fail.
+  The rationale here is to verify that the classes implemented in the course of \cref{ssec:newimmediates} actually reject constants that lie outside an immediate's value range.
+
+  Such a test attempts to create an immediate with, e.g., the smallest valid value minus one or the largest possible value plus one, which obviously must fail.
+  If additional constraints on the value range are realized by an immediate's constructor (cf. \cref{enum:immconstr}), additional failing unit tests should be added for all these constraints.
+
+  Code examples can be found in files \texttt{WIR/arch/riscv/tests/rvConst10Signed*}.
+
+  \item For each unit test created in the previous step that is expected to fail, add a new line\label{enum:failUnitTest} \\
+  \verb|  |\texttt{{\itshape newModelregType}.bin} \\
+  to the \texttt{check\_PROGRAMS} directive of file \texttt{arch/{\itshape archDir}/tests/Makefile.am}, and a new line \\
+  \verb|  |\texttt{{\itshape newModelregType}.sh} \\
+  to the \texttt{failscripts} directive of the very same Makefile.
+
+  \item The next unit test aims to validate the correctness of all opcodes and operation formats realized for a newly modeled processor architecture.\label{enum:oper1UnitTest}
+  For this purpose, create a new test \texttt{WIR/arch/{\itshape archDir}/tests/{\itshape new\-Model}Operations1.cc}.
+
+  Tests of this kind regularly first declare some virtual registers of all available register classes, some basic blocks and functions etc.
+  These objects will serve as parameters of all the machine operations created and validated in the following.
+
+  The main body of this test case next creates \gls{WIR} operations using all modeled combinations of opcodes and suitable operation formats.
+  For each such operation, the correct amount of register, immediate, or other parameters has to be provided in the correct order and with the correct def/use properties.
+  After the creation of each such operation, its fundamental properties such as its byte size and its classifications according to \cref{lst:operclass} are checked using assertions.
+
+  A typical code example can be found in file \texttt{WIR/arch/riscv/tests/rv32iOperations1.cc}.
+  Integrate this test that is expected to pass into the build infrastructure in analogy to \cref{enum:passUnitTest}.
+
+  \item As discussed in \cref{sec:newio}, a \gls{WIR} processor model should furthermore produce valid assembly code.
+  Thus, the output generated by the processor-specific dumper functions also needs to be validated using an external assembler for the modeled processor architecture.
+
+  The \gls{WIR} build infrastructure first of all needs to find the desired external assembler program.
+  Open file \texttt{WIR/configure.ac} and locate that part (quite in the middle of the whole file) where the assemblers for the ARM, RISC-V and TriCore architectures (\texttt{arm-elf-as}, \texttt{riscv32-unknown-elf-as} and \texttt{tricore-as}) are already determined.
+  Extend this part by the following two lines: \\
+  \verb|  |\texttt{AC\_PATH\_PROG({\itshape newmodel}as, {\itshape assemblerExecutable}, {\itshape assemblerExecutable})} \\
+  \verb|  |\texttt{AC\_SUBST({\itshape NEWMODEL}AS,}\verb|[${|\texttt{\itshape newmodel}\verb|as}])| \\
+  In the first line, replace both occurrences of \texttt{\itshape assemblerExecutable} by the name of the assembler's executable program as it is installed on your machine, but without any paths to that executable.
+  \texttt{{\itshape NEWMODEL}AS} and \texttt{{\itshape newmodel}as} use the acronym of the newly modeled processor architecture that was introduced already in the very beginning of this chapter, but once in upper-case and once in lower-case letters only.
+
+\begin{lstlisting}[style=commandline,float=t,caption={Makefile for Unit Tests Extended by Assembler Tests},label=lst:asmTestMakefile]
+[...]
+
+passscripts            = [...]
+aspassscripts          = Ü\label{lst:asmTestMakefile1}Ü
+
+check_SCRIPTS          = $(failscripts) $(passscripts)
+check_ASSCRIPTS        = $(aspassscripts) Ü\label{lst:asmTestMakefile2}Ü
+
+XFAIL_TESTS            = [...]
+TESTS                  = $(passscripts) $(aspassscripts) $(failscripts) Ü\label{lst:asmTestMakefile3}Ü
+
+# Source files and build flags
+CLEANFILES             = $(check_PROGRAMS) $(check_SCRIPTS) $(check_ASSCRIPTS) \ Ü\label{lst:asmTestMakefile4}Ü
+                         [...]
+
+# Specific rules
+
+[...]
+
+$(check_ASSCRIPTS): \Ü\label{lst:asmTestMakefile5}Ü
+        %.sh: %.bin
+        Ü@Üecho "Ü\#Ü!"$(BASH) > $Ü@Ü;
+        Ü@Üecho 'TMPFILE=/tmp/Ü\`{}Übasename $$0Ü\`{}Ü.$$$$.log' >> $Ü@Ü;Ü\label{lst:asmTestMakefile6}Ü
+        Ü@Üecho $(builddir)"/$< > "'$$TMPFILE' >> $Ü@Ü;Ü\label{lst:asmTestMakefile7}Ü
+        Ü@Üecho 'ret=$$?' >> $Ü@Ü;
+        Ü@Üecho 'if [ $$ret != 0 ]; then' >> $Ü@Ü;
+        Ü@Üecho '  rm $$TMPFILE' >> $Ü@Ü;
+        Ü@Üecho '  exit $$ret' >> $Ü@Ü;
+        Ü@Üecho 'fi' >> $Ü@Ü;
+        Ü@Üecho $(Ü{\itshape NEWMODEL}ÜAS)' $$TMPFILE' >> $Ü@Ü;Ü\label{lst:asmTestMakefile8}Ü
+        Ü@Üecho 'ret=$$?' >> $Ü@Ü;
+        Ü@Üecho 'rm $$TMPFILE' >> $Ü@Ü;
+        Ü@Üecho 'exit $$ret' >> $Ü@Ü;
+        Ü@Ü$(CHMOD) ugo+x $Ü@ÜÜ\label{lst:asmTestMakefile9}Ü
+\end{lstlisting}
+
+  \item Next, the Makefile \texttt{arch/{\itshape archDir}/tests/Makefile.am} needs to be extended towards assembly tests as shown in \cref{lst:asmTestMakefile}.
+  A new, empty \texttt{aspassscripts} directive needs to be added after the last entry of the already existing \texttt{passscripts} directive, cf. \cref{lst:asmTestMakefile1}.
+  After that, a \texttt{check\_ASSCRIPTS} directive has to be added as shown in \cref{lst:asmTestMakefile2}.
+  The \texttt{TESTS} directive from \cref{lst:asmTestMakefile3} needs to be extended by \texttt{aspassscripts}, and \texttt{check\_ASSCRIPTS} has to be added to \texttt{CLEANFILES} as shown in \cref{lst:asmTestMakefile4}.
+
+  The most important part, however, is shown in \crefrange{lst:asmTestMakefile5}{lst:asmTestMakefile9} that needs to be put at the very end of the Makefile.
+  These lines create a wrapper script that executes the actual \gls{WIR} test program and forwards its output into a temporary file.
+  This temporary file is afterwards fed into the new architecture's assembler (cf. \cref{lst:asmTestMakefile8}) as determined by the \texttt{{\itshape NEWMODEL}AS} macro from the previous step.
+  Should the assembler require any specific command-line flags, simply add them to \cref{lst:asmTestMakefile8} immediately before \verb|$$|\texttt{TMPFILE}.
+  Note that \cref{lst:asmTestMakefile6} uses regular apostrophe characters \texttt{'} twice, but two reversed apostrophes \`{} (accent grave) in order to surround the \texttt{basename }\verb|$$|\texttt{0} command.
+
+  \item Now, create a new test \texttt{WIR/arch/{\itshape archDir}/tests/{\itshape new\-Model}Operations2.cc}.
+  Tests of this kind regularly first declare some instance of the new architecture's processor model.
+  Using this, physical registers of all register classes are usually declared next, followed by some basic blocks and functions etc.
+  In analogy to \cref{enum:oper1UnitTest}, all these objects will serve as parameters of machine operations.
+  But since these operations will be processed by a subsequent assembler, no virtual registers are used here at all.
+
+  After these declarations, the standard output stream \texttt{std::cout} is switched to assembly output for the new architecture using the stream manipulator from \cref{lst:newprocioheader3} of \cref{lst:newprocioheader}.
+  Next, the test case should declare a simple C++ lambda that receives a \gls{WIR} operation, attaches a comment displaying its operation format to it and prints it to \texttt{std::cout}.
+
+  After this, the main body of this test case creates all possible operations of the new architecture in all valid formats and passes them to the above lambda.
+  Like this, all modeled operations get printed to \texttt{std::cout} one after the other, and this output of the test case is forwarded to the architecture's assembler as discussed in the previous step.
+
+  Again, a convenient code example for this kind of unit tests can be found in file \texttt{WIR/arch/riscv/tests/ rv32iOperations2.cc}.
+
+  \item Finally, add a new line \\
+  \verb|  |\texttt{{\itshape newModel}Operations2.bin} \\
+  to the \texttt{check\_PROGRAMS} directive of file \texttt{arch/{\itshape archDir}/tests/Makefile.am}, and a new line \\
+  \verb|  |\texttt{{\itshape newModel}Operations2.sh} \\
+  to the \texttt{aspassscripts} directive of the very same Makefile.
+\end{enumerate}
+
+
+\cleardoubleoddpage

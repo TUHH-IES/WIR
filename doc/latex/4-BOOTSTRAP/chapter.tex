@@ -1,0 +1,180 @@
+%=========================================================================
+\chapter{Bootstrapping and Configuration}
+\label{chap:bootstrap}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+This chapter describes the procedures that are required to bootstrap and to configure \gls{WIR}.
+\cref{sec:bootstrap} first discusses the steps needed to set up the GNU Build System, and \cref{sec:configure} describes configuration options.
+
+
+%-------------------------------------------------------------------------
+\section{Bootstrapping of the GNU Build System}
+\label{sec:bootstrap}
+%-------------------------------------------------------------------------
+
+After a checkout of the software package from its repository, \gls{WIR} does not yet contain any useful Makefiles in order to build the library from its C++ sources.
+As can be seen from \cref{lst:directorycheckout}, only some drivers for the GNU Build System are provided in the form of files \texttt{Makefile.am} and \texttt{configure.ac}.
+
+\begin{lstlisting}[style=commandline,float=h,caption={Directory Listing After Repository Checkout},label=lst:directorycheckout]
+@/tmp/WIR@> ls -F
+|analyses/|  configure.ac      |flowfacts/|  Makefile.am         README
+|arch/|      |containers/|       |LIBUSEFUL/|  Makefile.bootstrap  Releases
+AUTHORS    |DEBUGMACRO_CONF/|  LICENSE     NEWS                |tests/|
+ChangeLog  |doc/|              |m4/|         |optimizations/|      |wir/|
+\end{lstlisting}
+
+These files need to be processed by the GNU tools \texttt{automake} and \texttt{autoconf} in order to generate a configuration script which is then used to produced tailored Makefiles (cf. \cref{sec:configure}).
+The invocation of these GNU tools after a virgin repository checkout is handled by \texttt{Makefile.bootstrap} which needs to be run first (cf. \cref{lst:bootstrap}).
+
+\begin{lstlisting}[style=commandline,float=h,caption={Execution of \texttt{Makefile.bootstrap}},label=lst:bootstrap]
+@/tmp/WIR@> make -f Makefile.bootstrap
+make[1]: Entering directory '/tmp/WIR/LIBUSEFUL'
+libtoolize -q -c -f --subproject
+aclocal
+autoheader
+automake -a -c
+autoconf
+make[1]: Leaving directory '/tmp/WIR/LIBUSEFUL'
+libtoolize -q -c -f --subproject
+aclocal
+autoheader
+automake -a -c
+parallel-tests: installing './test-driver'
+autoconf
+\end{lstlisting}
+
+As can be seen, the various tools of the GNU Build System are properly executed for the entire software package.
+As a result of this, a couple of new files and scripts can now be found in the top-level directory of \gls{WIR} (cf. \cref{lst:beforeconfigure}).
+The interested reader is referred to the documentation of the GNU Build System~\cite{gnubuild26} for further information about all these new contents, this guide solely focuses on the newly generated script \texttt{configure} in the following.
+
+\begin{lstlisting}[style=commandline,float=ht,caption={Directory Listing After \texttt{automake}, \texttt{autoconf} and Friends},label=lst:beforeconfigure]
+@/tmp/WIR@> ls -F
+aclocal.m4       §configure§*        |LIBUSEFUL/|          |optimizations/|
+|analyses/|        configure.ac      LICENSE             README
+|arch/|            config_wir.h.in   §ltmain.sh§*          Releases
+AUTHORS          |containers/|       |m4/|                 §test-driver§*
+|autom4te.cache/|  |DEBUGMACRO_CONF/|  Makefile.am         |tests/|
+ChangeLog        §depcomp§*          Makefile.bootstrap  |wir/|
+§compile§*         doc/              Makefile.in
+§config.guess§*    flowfacts/        §missing§*
+§config.sub§*      §install-sh§*       NEWS
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Configuration of a WIR Build}
+\label{sec:configure}
+%-------------------------------------------------------------------------
+
+In order to keep the main source directories of \gls{WIR} containing all C++ header and implementation files uncluttered, the following procedures will confine all derived files like, e.g., object files, libraries and programs to a single \texttt{BUILD} directory.
+For this purpose, this directory needs to be created and the \texttt{configure} script from the previous step needs to be invoked from this place (cf. \cref{lst:configure}).
+
+\begin{lstlisting}[style=commandline,float=h,caption={Execution of \texttt{configure} Script},label=lst:configure]
+@/tmp/WIR@> mkdir BUILD
+
+@/tmp/WIR@> cd BUILD
+
+@/tmp/WIR/BUILD@> ../configureÜ\label{lst:configureconfig}Ü
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-pc-linux-gnu
+checking target system type... x86_64-pc-linux-gnu
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+[...]
+WIR Configuration:
+  Install path:                 /usr/local
+  C++ Compiler flags:           -Og -g -Wall -Wextra -Wno-parentheses -std=c++17 -m64
+  C Compiler flags:             -Og -g -Wall -Wextra -m64 -g -O2
+  C Preprocessor flags:         -I/tmp/WIR/LIBUSEFUL -I/tmp/WIR
+  Linker flags:
+  Build shared libraries:       yes
+  Build static libraries:       no
+
+  Enabled processor models:     generic arm riscv tricore
+  Enabling failsafe mode:       no
+  Enabling debug macros:        no
+  Build DOXYGEN documentation:  yes
+  Use LIBUSEFUL in:             /tmp/WIR/BUILD/LIBUSEFUL
+\end{lstlisting}
+
+\texttt{configure} executes a series of checks of the host system (mostly omitted in the above \namecref{lst:configure}), creates all required Makefiles within the \texttt{BUILD} directory and prints a short configuration summary.
+The contents of the \texttt{BUILD} directory after configuration is depicted in \cref{lst:afterconfigure}.
+It contains a directory structure that is equivalent to that of the main source directories of \gls{WIR} and that will contain all files derived while building.
+Furthermore, the final Makefile driving the entire build procedure can now be found in \texttt{WIR/BUILD/Makefile}.
+
+\begin{lstlisting}[style=commandline,float=ht,caption={Directory Listing After \texttt{configure}},label=lst:afterconfigure]
+@/tmp/WIR/BUILD@> ls -F
+|analyses/|   §config.status§*  |doc/|        |LIBUSEFUL/|      stamp-h1
+|arch/|       config_wir.h    |flowfacts/|  Makefile        |tests/|
+config.log  |containers/|     §libtool§*    |optimizations/|  |wir/|
+\end{lstlisting}
+
+While it is fully sufficient to call \texttt{configure} without any additional arguments for simple default builds as shown in \cref{lst:configureconfig} of \cref{lst:configure}, it regularly becomes necessary to configure a \gls{WIR} build to specific needs.
+\cref{tab:configure} provides a short overview over the most relevant options for the \texttt{configure} script.
+They serve
+\begin{itemize}
+  \item to tailor the specifics of the built binary \gls{WIR} libraries on a certain host system, e.g., their installation location (\texttt{-{}-prefix}), whether highly optimized binary libraries are produced (\texttt{-{}-with-release-quality}), whether 64- or 32-bit libraries are built (\texttt{-{}-enable-x64}), or whether shared or static libraries are built (\texttt{-{}-enable-shared} and/or \texttt{-{}-enable-static}); or
+  \item to activate or deactivate certain features of the \gls{WIR} software package like, e.g., the browsable HTML reference documentation (\texttt{-{}-with-doxygen-doc}), the debug macro based infrastructure (\texttt{-{}-enable-wir- debugmacros}), or the full memory debugging features based on AddressSanitizer and memory protection (\texttt{-{}-enable-memory-debugging}).
+\end{itemize}
+
+\begin{table}[!b]
+  \begin{center}
+    \caption{Most Relevant \texttt{configure} Options}
+    \label{tab:configure}
+    \begin{tabular}{|p{69mm}|p{96mm}|}
+      \hline
+      \textbf{Option (Pair)} & \textbf{Description} \\
+      \hhline{|=|=|}
+      \texttt{\small-{}-prefix=\emph{<INSTALLDIR>}} & Specify \texttt{\emph{<INSTALLDIR>}} as installation location \\
+      \hline
+      \raggedright \texttt{\small-{}-with-release-quality} & Build with highest optimization level of host compiler (default: no) \\
+      \hline
+      \raggedright \texttt{\small-{}-with-doxygen-doc} or \texttt{\small-{}-without-doxygen-doc} & Build browsable HTML documentation using \texttt{doxygen} (default: yes) \\
+      \hline
+      \raggedright \texttt{\small-{}-enable-wir-debugmacros} or \texttt{\small-{}-disable-wir-debugmacros} & Enable use of debug macros infrastructure (cf. \cref{sec:debugmacros}) (default: no) \\
+      \hline
+      \texttt{\small-C} & Cache results of checks in order to speed up configuration \\
+      \hline
+      \texttt{\small-{}-with-debugmacro-configuration=\emph{<PATH>}} & Specify \texttt{\emph{<PATH>}} as location of debug macro configuration files (default: source directory \texttt{WIR/DEBUGMACRO\_CONF}) \\
+      \hline
+      \raggedright \texttt{\small-{}-enable-memory-debugging} or \texttt{\small-{}-disable-memory-debugging} & Build with activated stack protection, address sanitizer and libstdc++ debugging (default: no) \\
+      \hline
+      \raggedright \texttt{\small-{}-enable-x64} or \texttt{\small-{}-disable-x64} & Build 64-bit or 32-bit libraries (default: 64) \\
+      \hline
+      \raggedright \texttt{\small-{}-enable-shared} or \texttt{\small-{}-disable-shared} & Build shared libraries (default: yes) \\
+      \hline
+      \raggedright \texttt{\small-{}-enable-static} or \texttt{\small-{}-disable-static} & Build static libraries (default: no) \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+Besides such explicit command line options, the \texttt{configure} script is also sensitive to shell environment variables like, e.g., \texttt{CXX} or \texttt{CXXFLAGS}.
+They can be used to select a non-default host compiler for the translation of the \gls{WIR} C++ code base into binary libraries.
+By default, \texttt{configure} uses the GNU \texttt{g++} compiler~\cite{gcc26} for \gls{WIR} builds.
+In order to switch to LLVM's \texttt{clang++}~\cite{llvm26}, these shall variables need to be set as follows (example refers to a Bourne-compatible shell):
+
+\begin{lstlisting}[style=commandline,float=h]
+@/tmp/WIR/BUILD@> export CXX=clang++
+
+@/tmp/WIR/BUILD@> export CXXFLAGS="-ftemplate-depth=1024 -D_GLIBCXX_USE_CXX11_ABI=0"
+\end{lstlisting}
+
+\begin{wirNote}
+  Setting these environment variables as shown above has to be done \textit{before} executing the \texttt{configure} script.
+\end{wirNote}
+
+For a typical development build of \gls{WIR}, an appropriate configuration could be:
+
+\begin{lstlisting}[style=commandline,float=h]
+@/tmp/WIR/BUILD@> ../configure --prefix=<<<INSTALLDIR>>> --enable-wir-debugmacros
+\end{lstlisting}
+
+while a highly optimized production build could be generated using:
+
+\begin{lstlisting}[style=commandline,float=h]
+@/tmp/WIR/BUILD@> ../configure --prefix=<<<INSTALLDIR>>> --with-release-quality --without-doxygen-doc
+\end{lstlisting}
+
+\cleardoubleoddpage

@@ -1,0 +1,96 @@
+digraph G {
+compound=true;
+newrank=true;
+graph [rotate=90]
+subgraph clusterLegend {
+legendBB[label="Basic Block",shape=oval]
+;
+legendBBEntry[label="Entry Node",shape=oval,style=bold]
+;
+legendRegion[label="Control Region",shape=box,color=blue]
+;
+legend1[shape=point]
+;
+legend2[shape=point]
+;
+legend1->legend2[label="Back edge",dir=forward,arrowhead=vee,arrowtail=none,color=chartreuse4,style=bold]
+;
+legend3[shape=point]
+;
+legend4[shape=point]
+;
+legend3->legend4[label="Loop exit edge",dir=forward,arrowhead=vee,arrowtail=none,color=orange,style=bold]
+;
+legend5[shape=point]
+;
+legend6[shape=point]
+;
+legend5->legend6[label="Break edge",dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+}
+
+subgraph cluster5685 {
+  label="Self-Loop";
+  color=blue;
+  1[label=".L1",style=bold]
+;
+}
+  2[label=".L2"]
+;
+
+1->1[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+1->2[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+
+subgraph cluster5724 {
+  label="While-Do Loop";
+  color=blue;
+  3[label=".L3",style=bold]
+;
+subgraph cluster5723 {
+  label="Block Region";
+  color=blue;
+  4[label=".L4",style=bold]
+;
+  5[label=".L5"]
+;
+}
+}
+  6[label=".L6"]
+;
+3->4[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+3->6[dir=forward,arrowhead=vee,arrowtail=none,color=orange,style=bold]
+;
+4->5[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+5->3[dir=forward,arrowhead=vee,arrowtail=none,style=bold,color=chartreuse4,style=bold]
+;
+
+subgraph cluster5719 {
+  label="Natural Loop";
+  color=blue;
+  7[label=".L7",style=bold]
+;
+subgraph cluster5718 {
+  label="Block Region";
+  color=blue;
+  8[label=".L8",style=bold]
+;
+  9[label=".L9"]
+;
+}
+}
+  10[label=".L10"]
+;
+7->8[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+8->9[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+9->7[dir=forward,arrowhead=vee,arrowtail=none,style=bold,color=chartreuse4,style=bold]
+;
+9->10[dir=forward,arrowhead=vee,arrowtail=none,color=orange,style=bold]
+;
+
+}

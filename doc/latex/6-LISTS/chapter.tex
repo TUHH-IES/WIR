@@ -1,0 +1,199 @@
+%=========================================================================
+\chapter{General Handling of List Structures Within WIR}
+\label{chap:lists}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+At many places within \gls{WIR}, lists are a central data structure.
+This chapter thus describes the general \gls{API} of all list-based structures as they regularly appear in the public interfaces of \gls{WIR} classes.
+
+When revisiting \cref{fig:swmodel}, it is easy to see that a \texttt{WIR\_System} can contain 0 to many \texttt{WIR\_CompilationUnit}s which are given in some specific order.
+A compilation unit in turn can contain 0 to many \texttt{WIR\_Function}s, which again can consist of 0 to many \texttt{WIR\_BasicBlock}s in some given order, etc.
+This scheme applies to the entire hierarchy from \cref{fig:swmodel} from \texttt{WIR\_System} down to \texttt{WIR\_Parameter}, and to many other places inside \gls{WIR}.
+Since the order matters, in which objects of some lower parts of this class hierarchy are stored by their respective parent objects, standard C++ lists (\texttt{std::list}) come into play here.
+
+As one design goal of the \gls{WIR} class interfaces is to keep the \gls{API} free of pointers as far as possible, all \gls{WIR} lists exposed to application code make maximal use of references instead.
+In the following, this chapter thus describes the general \gls{API} design of such lists of references to \gls{WIR} objects.
+For the sake of simplicity, the examples given in the following sections only refer to \texttt{WIR\_Instruction}s that are organized into a list within class \texttt{WIR\_BasicBlock}.
+By replacing the names of the contained class (here: \texttt{Instruction}) and of the containing class (here: \texttt{BasicBlock}), it is straightforward to generalize the following examples to all other places inside \gls{WIR}.
+
+\cref{sec:listinsertion} describes how to insert new elements into lists.
+Hereafter, \cref{sec:listmodification} introduces the \gls{API} for list modification.
+In certain situations, it might be desired to prevent some objects from being modified.
+\cref{sec:dontoptimize} thus describes a simple \gls{API} for modification prevention.
+Finally, \cref{sec:listlookup,sec:listdestruction} introduce the \gls{API} for list lookup and destruction of list elements, resp.
+
+
+%-------------------------------------------------------------------------
+\section{Insertion}
+\label{sec:listinsertion}
+%-------------------------------------------------------------------------
+
+\begin{lstlisting}[style=code,float=!b,caption={Insertion of WIR Objects at List Heads and Tails},label=lst:listapipush]
+// Copy-add a new element at the end of a list, after its current last element.
+WIR_Instruction æ&æ WIR_BasicBlock::pushBackInstruction@(@ const WIR_Instruction æ&æo @)@;Ü\label{lst:listapipushback1}Ü
+
+// Move-add a new element at the end of a list, after its current last element.
+WIR_Instruction æ&æ WIR_BasicBlock::pushBackInstruction@(@ WIR_Instruction æ&&æo @)@;Ü\label{lst:listapipushback2}Ü
+
+// Copy-add a new element at the beginning of a list, before its current first element.
+WIR_Instruction æ&æ WIR_BasicBlock::pushFrontInstruction@(@ const WIR_Instruction æ&æo @)@;Ü\label{lst:listapipushfront1}Ü
+
+// Move-add a new element at the beginning of a list, before its current first element.
+WIR_Instruction æ&æ WIR_BasicBlock::pushFrontInstruction@(@ WIR_Instruction æ&&æo @)@;Ü\label{lst:listapipushfront2}Ü
+\end{lstlisting}
+
+Inserting at the head and the tail of a list are the most frequent scenarios to insert a new element.
+This is realized within \gls{WIR} by the group of \texttt{pushBack} and \texttt{pushFront} methods shown in \cref{lst:listapipush}.
+They all receive an object \texttt{o} to be inserted as argument, insert it at the list tail or head, resp., and return a reference to the newly inserted list element.
+Those variants receiving a const reference as argument (cf. \cref{lst:listapipushback1,lst:listapipushfront1} above) implicitly create a copy of \texttt{o}, insert this copy into the list, and return a reference to that copy of \texttt{o}.
+In contrast, the variants from \cref{lst:listapipushback2,lst:listapipushfront2} above expect an R-value reference of \texttt{o} and directly move that object \texttt{o} into the list.
+Due to the move semantics of C++, these move-based methods are much more efficient than those ones implicitly copying objects.
+
+\begin{lstlisting}[style=code,float=t,caption={Insertion of WIR Objects at Arbitrary List Positions},label=lst:listapiinsert]
+// Copy-insert a new element before the element given by iterator pos.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::iteratoræ WIR_BasicBlock::insertInstruction@(@ ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::const_iteratoræ pos, const WIR_Instruction æ&æo @)@;Ü\label{lst:listapiinsert1}Ü
+
+// Move-insert a new element before the element given by iterator pos.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::iteratoræ WIR_BasicBlock::insertInstruction@(@ ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::const_iteratoræ pos, WIR_Instruction æ&&æo @)@;Ü\label{lst:listapiinsert2}Ü
+\end{lstlisting}
+
+In order to insert an element at some arbitrary list position, the \texttt{insert} methods shown in \cref{lst:listapiinsert} are provided.
+Due to the fact that C++ standard containers like, e.g., \texttt{std::list} cannot store references to objects, the \gls{WIR} list interfaces heavily use class \texttt{std::reference\_wrapper} in order to wrap references into lists.
+Thus, the list of instructions managed by some \gls{WIR} basic block as shown in all the previous code examples technically is a \texttt{std::list} of objects of class \texttt{std::reference\_wrapper}, which in turn keep the references to \texttt{WIR\_Instruction}s.
+
+The \texttt{insert} methods from \cref{lst:listapiinsert} thus expect an iterator \texttt{pos} specifying the position in the list \emph{before} which the new element \texttt{o} shall be inserted.
+Both methods return an iterator referring to the position of the newly inserted list element.
+Again, the \gls{WIR} interface provides both a copy- and a move-based variant of the \texttt{insert} methods.
+
+\begin{wirWarn}
+  After the insertion of some element \texttt{o} into a list using either of the methods from \cref{lst:listapipush,lst:listapiinsert}, it is considered wrong if application code assumes that \texttt{o} itself is part of some list afterwards.
+  Instead, application code is recommended to use the references or iterators returned by these methods in order to obtain a safe handle to the newly inserted list item.
+\end{wirWarn}
+
+\begin{wirWarn}
+  Whenever some object \texttt{o} is inserted into some \gls{WIR} list using the above \texttt{pushBack}, \texttt{pushFront} or \texttt{insert} methods, the list takes over the exclusive ownership of the inserted list element.
+  This means that the \gls{WIR} lists take care of the proper deletion of list elements.
+  Application code thus shall never take pointers to \gls{WIR} list elements and must never manually delete such pointers.
+\end{wirWarn}
+
+
+%-------------------------------------------------------------------------
+\section{Modification}
+\label{sec:listmodification}
+%-------------------------------------------------------------------------
+
+Modification of already existing entries in some \gls{WIR} list can be achieved using the \texttt{replace} methods from \cref{lst:listapireplace}.
+They expect an iterator \texttt{pos} specifying the position in the list that shall be replaced by the new element \texttt{o}.
+Both methods return an iterator referring to the position of the newly inserted list element, and again, both a copy- and a move-based variant of the \texttt{replace} methods is provided.
+The list element that gets replaced is immediately destroyed.
+
+\begin{lstlisting}[style=code,float=ht,caption={Replacement of WIR Objects in Lists},label=lst:listapireplace]
+// Replace the list element given by iterator pos by copying o to the specified position.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::iteratoræ WIR_BasicBlock::replaceInstruction@(@ ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::const_iteratoræ pos, const WIR_Instruction æ&æo @)@;Ü\label{lst:listapireplace1}Ü
+
+// Replace the list element given by iterator pos by moving o to the specified position.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::iteratoræ WIR_BasicBlock::replaceInstruction@(@ ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::const_iteratoræ pos, WIR_Instruction æ&&æo @)@;Ü\label{lst:listapireplace2}Ü
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Modification Prevention}
+\label{sec:dontoptimize}
+%-------------------------------------------------------------------------
+
+Sometimes, a system designer might want certain parts of the code base not to be modified, e.g., by some automatically applied optimization.
+A typical example is hand-written assembly code that is embedded into, e.g., C/C++ application code using inline assembly directives.
+For the purpose of obfuscation and improved software security, such human-written inline assembly shall remain untouched and shall not be optimized or even completely eliminated by subsequent optimizations.
+
+\gls{WIR} supports this throughout its complete software model from \cref{fig:swmodel} by providing the methods shown in \cref{lst:dontoptimize}.
+The \texttt{set} method (cf. \cref{lst:dontoptimize1}) serves to lock or unlock some \gls{WIR} object, while the \texttt{get} method (cf. \cref{lst:dontoptimize2}) returns its current status.
+\texttt{getDontOptimize} always works in a hierarchical manner.
+This means that as soon as some basic block has been locked using \texttt{WIR\_BasicBlock::setDontOptimize()}, automatically all instructions, operations and parameters contained by this basic block are also prevented from modification.
+Thus, \texttt{WIR\_Instruction::getDontOptmimize()} will return \texttt{true} for some instruction contained by a locked basic block, even if the instruction itself has not been locked explicitly.
+
+\begin{lstlisting}[style=code,float=h,caption={Modification Prevention of WIR Objects},label=lst:dontoptimize]
+// Set whether some object can be modified or must not be changed by some optimization.
+@void@ WIR_BasicBlock::setDontOptimize@( bool@ f æ=æ true @)@;Ü\label{lst:dontoptimize1}Ü
+
+// Determine whether some object can be modified or must not be changed by some optimization.
+@bool@ WIR_BasicBlock::getDontOptimize@( void )@ const;Ü\label{lst:dontoptimize2}Ü
+\end{lstlisting}
+
+Any attempt to modify a \gls{WIR} object for which \texttt{getDontOptimize} returns \texttt{true} will result in a runtime error.
+
+
+%-------------------------------------------------------------------------
+\section{Lookup}
+\label{sec:listlookup}
+%-------------------------------------------------------------------------
+
+The lookup of list structures within \gls{WIR} is realized using the methods depicted in \cref{lst:listapilookup}.
+Here, the \texttt{get} method (cf. \cref{lst:listapiget}) returns a reference to the full \gls{STL} list which can then be used for traversal or check of emptiness etc. using the standard lookup operators of \gls{STL} class \texttt{std::list}.
+
+\begin{lstlisting}[style=code,float=ht,caption={Lookup of WIR Objects in Lists},label=lst:listapilookup]
+// Get the full list of references to list elements.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>> &æWIR_BasicBlock::getInstructions@( void )@ const;Ü\label{lst:listapiget}Ü
+
+// Determine whether the list contains an item with the given ID.
+@bool@ WIR_BasicBlock::containsInstruction@(@ WIR_id_t id @)@ const;Ü\label{lst:listapicontains1}Ü
+
+// Determine whether the list contains the given item.
+@bool@ WIR_BasicBlock::containsInstruction@(@ const WIR_Instruction æ&æo @)@ const;Ü\label{lst:listapicontains2}Ü
+
+// Find the list element with the given ID.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::const_iteratoræ WIR_BasicBlock::findInstruction@(@ WIR_id_t id @)@ const;Ü\label{lst:listapifind1}Ü
+
+// Find the given list element.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::const_iteratoræ WIR_BasicBlock::findInstruction@(@        const WIR_Instruction æ&æo @)@ const;Ü\label{lst:listapifind2}Ü
+\end{lstlisting}
+
+\begin{wirWarn}
+  Application code shall never attempt to directly manipulate a list returned by the \texttt{get} method from \cref{lst:listapilookup}.
+  Instead, only the methods described in this chapter must be used for insertion, manipulation or deletion of list elements.
+  A direct manipulation of such a list using standard \gls{STL} list operations like, e.g., \texttt{push\_back}, \texttt{emplace} or \texttt{splice} inevitably leads to corrupt internal data structures within \gls{WIR}.
+\end{wirWarn}
+
+The \texttt{contains} methods test whether a list contains some specified item and provide the corresponding Boolean result.
+Internally, all \gls{WIR} objects carry a unique numerical identifier, represented by type \texttt{WIR\_id\_t} (cf. \cref{sec:ids} for more information about the rationale behind \gls{WIR} IDs).
+The \texttt{contains} variant from \cref{lst:listapicontains1} thus checks whether a list contains an element having the given ID.
+In contrast, the variant from \cref{lst:listapicontains2} checks whether some actual object is contained in a list.
+
+The \texttt{find} methods (cf. \crefrange{lst:listapifind1}{lst:listapifind2}) locate a given item in a list and provide an iterator to the found position.
+If the list does not contain the item to be found, the \texttt{end()} iterator is returned.
+As above, both variants to find an item with a given ID (cf. \cref{lst:listapifind1}) and to find some actual object (cf. \cref{lst:listapifind2}) exist.
+
+
+%-------------------------------------------------------------------------
+\section{Destruction}
+\label{sec:listdestruction}
+%-------------------------------------------------------------------------
+
+In order to remove some element, \gls{WIR} lists provide the methods depicted in \cref{lst:listapiremove}.
+To remove the list's tail or head element, the \texttt{popBack} (cf. \cref{lst:listapipopback}) and \texttt{popFront} (cf. \cref{lst:listapipopfront}) methods exist.
+Using \texttt{erase} from \cref{lst:listapierase}, a list element at some arbitrary position specified by an iterator can be erased.
+\texttt{erase} returns an iterator referring to the list element following the erased element.
+Removing all elements from a list can be achieved using \texttt{clear} (cf. \cref{lst:listapiclear}).
+
+\begin{lstlisting}[style=code,float=!b,caption={Removal of WIR Objects from Lists},label=lst:listapiremove]
+// Remove the last list element.
+@void@ WIR_BasicBlock::popBackInstruction@( void )@;Ü\label{lst:listapipopback}Ü
+
+// Remove the first list element.
+@void@ WIR_BasicBlock::popFrontInstruction@( void )@;Ü\label{lst:listapipopfront}Ü
+
+// Remove the specified list element.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>::iteratoræ WIR_BasicBlock::eraseInstruction@(@ ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>>>::const_iteratoræ pos @)@;Ü\label{lst:listapierase}Ü
+
+// Remove all list elements.
+@void@ WIR_BasicBlock::clearInstructions@( void )@;Ü\label{lst:listapiclear}Ü
+\end{lstlisting}
+
+Whenever some element is removed from a \gls{WIR} list using the methods from \cref{lst:listapiremove}, the removed element is automatically destroyed and its memory released.
+
+\begin{wirWarn}
+  Keeping references or pointers to \gls{WIR} objects even though they have been removed from their respective parent objects is considered wrong.
+  Using such dangling references or dereferencing such pointers inevitably introduces use-after-free errors.
+\end{wirWarn}
+
+\cleardoubleoddpage

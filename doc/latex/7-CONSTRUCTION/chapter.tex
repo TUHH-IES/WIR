@@ -1,0 +1,212 @@
+%=========================================================================
+\chapter{Construction and Traversal of WIR Object Hierarchies}
+\label{chap:construction}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+Referring once more back to \cref{fig:swmodel}, it is evident that \gls{WIR} based applications regularly have to create object hierarchies where, e.g., some functions are contained by a \texttt{WIR\_CompilationUnit}, or where various parameters are used to build up a \texttt{WIR\_Operation}.
+This chapter thus describes the mechanisms how to set up such object hierarchies, and how to traverse and to navigate within these \gls{WIR} hierarchies.
+
+\cref{sec:listconstruction} first describes the straightforward approach to set up complex object hierarchies based on the list interfaces from \cref{chap:lists}.
+A simpler and more efficient approach for the very same purpose exploits C++ variadic templates and is introduced in \cref{sec:variadicconstruction}.
+Finally, the traversal and navigation inside hierarchies of \gls{WIR} objects is subject of \cref{sec:traversal}.
+
+
+%-------------------------------------------------------------------------
+\section{Construction Using List Interfaces}
+\label{sec:listconstruction}
+%-------------------------------------------------------------------------
+
+Using the interfaces described in \cref{chap:lists}, it is simple to create objects and plug them together into a hierarchy as shown in \cref{fig:swmodel}.
+\cref{lst:listconstruction} shows a code snippet demonstrating this by means of \gls{WIR} classes \texttt{WIR\_System} down to \texttt{WIR\_Parameter}, and by referring to the generic MIPS hardware model.
+
+\begin{lstlisting}[style=code,float=ht,caption={Construction of Object Hierarchies using List Interface},label=lst:listconstruction]
+// Include WIR headers.
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/generic/mips.h>§
+
+using namespace WIR;
+
+@int@ main@( void )@
+{
+  // Initialize WIR.
+  WIR_Init@()@;
+
+  // Create WIR system.
+  WIR_TaskManager t;
+  WIR_System sys@(@ "genericmips.sys", t @)@;
+
+  // Create various WIR objects.
+  WIR_CompilationUnit æ&æc = sys.pushBackCompilationUnit@(@ WIR_Function@(@ "foo" @) )@;Ü\label{lst:listcu}Ü
+  WIR_Function æ&æf = c.getFunctions@()@.front@()@.get@()@;Ü\label{lst:listfct}Ü
+  WIR_VirtualRegister æ&ær1 = f.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ MIPS::RegisterType::reg @) )@;Ü\label{lst:listr1}Ü
+  WIR_VirtualRegister æ&ær2 = f.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ MIPS::RegisterType::reg @) )@;Ü\label{lst:listr2}Ü
+  WIR_BasicBlock b;Ü\label{lst:listbb}Ü
+  WIR_Instruction i;Ü\label{lst:listins}Ü
+
+  // Create an operation.
+  WIR_RegisterParameter p1@(@ r1, WIR_Usage::def @)@;Ü\label{lst:listp1}Ü
+  WIR_RegisterParameter p2@(@ r2, WIR_Usage::use @)@;Ü\label{lst:listp2}Ü
+  MIPS_Immediate16_Signed p3@(@ §42§ @)@;Ü\label{lst:listp3}Ü
+  WIR_Operation o@(@ MIPS::OpCode::ADDI, MIPS::OperationFormat::RRI, p1, p2, p3 @)@;Ü\label{lst:listop}Ü
+
+  // Create object hierarchy using list API.
+  i.pushBackOperation@(@ o @)@;Ü\label{lst:listpbop}Ü
+  b.pushBackInstruction@(@ i @)@;Ü\label{lst:listpbins}Ü
+  f.pushBackBasicBlock@(@ b @)@;Ü\label{lst:listpbbb}Ü
+
+  return@(@ §0§ @)@;
+}
+\end{lstlisting}
+
+In \cref{lst:listcu}, a compilation unit is inserted into a \gls{WIR} system, and this compilation unit to be inserted is created such that it directly contains a \texttt{WIR\_Function} named \texttt{foo} from scratch.
+A reference to the newly inserted compilation unit returned by \texttt{pushBackCompilationUnit} is kept in \texttt{c}.
+
+A reference \texttt{f} to the implicitly created \gls{WIR} function \texttt{foo} is retrieved in \cref{lst:listfct} by getting the list of functions from \texttt{c} and picking its head.
+In lines \cref{lst:listr1,lst:listr2}, two virtual MIPS registers \texttt{r1} and \texttt{r2} are created using method \texttt{pushBackVirtualRegister} of \gls{WIR} function \texttt{f}.
+Furthermore, a basic block \texttt{b} is declared (cf. \cref{lst:listbb}) as well as an instruction \texttt{i} (cf. \cref{lst:listins}).
+
+\crefrange{lst:listp1}{lst:listop} next create a \gls{WIR} MIPS assembly operation \texttt{o}.
+For this purpose, the parameters of this intended operation are created first, where \texttt{p1} is a register parameter where the previously created register \texttt{r1} gets defined/written by the operation (cf. \cref{lst:listp1}).
+Similarly, parameter \texttt{p2} represents register \texttt{r2} that is used/read by the operation (cf. \cref{lst:listp2}).
+In the given example, parameter \texttt{p3} represents a signed 16-bit immediate value in the MIPS \gls{ISA}, which is set to the value 42 (cf. \cref{lst:listp3}).
+These three parameters are then used to construct the MIPS \texttt{ADDI} operation {o} in \cref{lst:listop}.
+The constructor of class \texttt{WIR\_Operation} expects the operation's opcode and its operation format as first arguments, followed by the operation's parameters.
+In the given example, the MIPS operation format \texttt{RRI} denotes an operation taking a \texttt{R}egister as first parameter, another \texttt{R}egister as second parameter, and an \texttt{I}mmediate as third parameter.
+
+Finally, all these various objects are used to set up a proper \gls{WIR} object hierarchy by again using the list interfaces from \cref{chap:lists} (cf. \crefrange{lst:listpbop}{lst:listpbbb}).
+First, operation \texttt{o} is pushed-back into instruction \texttt{i}.
+Next, the same happens with \texttt{i} and basic block \texttt{b}.
+Finally, \texttt{b} is plugged into function \texttt{f}, which already was part of compilation unit \texttt{c}, which in turn is owned by \gls{WIR} system \texttt{sys}.
+
+
+%-------------------------------------------------------------------------
+\section{Variadic Construction}
+\label{sec:variadicconstruction}
+%-------------------------------------------------------------------------
+
+While the construction and creation of object hierarchies as illustrated in the previous section is simple and straightforward, the separate declarations, creations, and insertions of objects as shown in lines \crefrange{lst:listbb}{lst:listpbbb} of \cref{lst:listconstruction} can be quite cumbersome in many situations.
+Due to this, many \gls{WIR} classes come with constructors using C++ variadic templates.
+They allow to create a new object that directly contains an arbitrary number of contained other objects right from the beginning.
+
+An example of this concept already showed up in \cref{lst:listop} of \cref{lst:listconstruction}, where an operation with three parameters was constructed.
+However, the constructor of class \texttt{WIR\_Operation} is not bound to exactly three parameters.
+Instead, it can create operations with 0, or 1, or, e.g., 13 parameters if desired.
+
+This genericity allows to simplify the example from \cref{lst:listconstruction} heavily.
+\cref{lst:variadicconstruction} shows a code example where directly from scratch, a hierarchy consisting of a function with one basic block, two instructions, and each of them featuring one operation is constructed and plugged together.
+
+\cref{lst:variadicpbbb} pushes a new basic block into \gls{WIR} function \texttt{f}.
+\crefrange{lst:variadicins1}{lst:variadicp4} next specify the structure of this new basic block in a variadic manner.
+As can be seen from \cref{lst:variadicins1,lst:variadicins2}, the basic block will feature two instructions.
+In general, an arbitrary amount of instructions can be specified, separated by commas during construction.
+The first instruction in turn consists of the MIPS \texttt{ADDI} operation already used as example in \cref{lst:listconstruction}.
+But in contrast to that previous example, \crefrange{lst:variadicp1}{lst:variadicp3} now construct the required number of parameters directly on the fly in variadic style.
+Similarly, the second instruction of the newly created basic block is constructed.
+This instruction contains one MIPS \texttt{JR} operation which requires one register as used parameter (cf. \crefrange{lst:variadicop2}{lst:variadicp4}).
+
+\begin{lstlisting}[style=code,float=t,caption={Variadic Construction of Object Hierarchies},label=lst:variadicconstruction]
+// Create various WIR objects.
+auto æ&æc = sys.pushBackCompilationUnit@(@ WIR_Function@(@ "foo" @) )@;
+auto æ&æf = c.getFunctions@()@.front@()@.get@()@;
+auto æ&ær1 = f.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ MIPS::RegisterType::reg @) )@;
+auto æ&ær2 = f.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ MIPS::RegisterType::reg @) )@;
+
+// Create two instructions, directly embedded into object hierarchy.
+f.pushBackBasicBlock@(@Ü\label{lst:variadicpbbb}Ü
+  æ{æ WIR_Instruction@(@Ü\label{lst:variadicins1}Ü
+      æ{æ MIPS::OpCode::ADDI, MIPS::OperationFormat::RRI,Ü\label{lst:variadicop1}Ü
+        WIR_RegisterParameter@(@ r1, WIR_Usage::def @)@,Ü\label{lst:variadicp1}Ü
+        WIR_RegisterParameter@(@ r2, WIR_Usage::use @)@,Ü\label{lst:variadicp2}Ü
+        MIPS_Immediate16_Signed@(@ §42§ @)@ æ}æ @)@,Ü\label{lst:variadicp3}Ü
+    WIR_Instruction@(@Ü\label{lst:variadicins2}Ü
+      æ{æ MIPS::OpCode::JR, MIPS::OperationFormat::R_2,Ü\label{lst:variadicop2}Ü
+        WIR_RegisterParameter@(@ r1, WIR_Usage::use @)@ æ}æ @)@ æ}æ @)@;Ü\label{lst:variadicp4}Ü
+\end{lstlisting}
+
+This concept of variadic creation can of course also be used to construct compilation units with an arbitrary number of functions, and functions with an arbitrary number of basic blocks right upfront.
+Using these mechanisms is highly efficient, since the already previously mentioned move semantics of C++ is involved here, avoiding unnecessary copies of \gls{WIR} objects.
+
+
+%-------------------------------------------------------------------------
+\section{Traversal and Navigation}
+\label{sec:traversal}
+%-------------------------------------------------------------------------
+
+Once complex, hierarchical structures of \gls{WIR} objects have been constructed using the techniques described in \cref{sec:listconstruction,sec:variadicconstruction}, these hierarchies regularly need to be traversed.
+Given the hierarchy resulting from \cref{lst:variadicconstruction}, its complete traversal is as simple as shown in \cref{lst:traversal}.
+Range-based \texttt{for} loops of C++ can be used to directly traverse almost all object hierarchies within \gls{WIR}, and to obtain proper references to all objects contained by some parent object.
+Compiling and executing this example produces the output
+
+\begin{lstlisting}[style=commandline,float=h]
+Visiting compilation unit.
+  Visiting function.
+    Visiting basic block.
+      Visiting instruction.
+        Visiting operation.
+          Visiting parameter.
+          Visiting parameter.
+          Visiting parameter.
+      Visiting instruction.
+        Visiting operation.
+          Visiting parameter.
+\end{lstlisting}
+
+which shows the expected structure of the traversed \gls{WIR} object hierarchy created by \cref{lst:variadicconstruction}.
+
+\begin{lstlisting}[style=code,float=t,caption={Traversal of Object Hierarchies using Range-Based Loops},label=lst:traversal]
+// Traverse object hierarchy.
+for @(@ WIR_CompilationUnit æ&æcu æ:æ sys @)@ æ{æ
+  ästd::coutä æ<<æ "Visiting compilation unit." æ<<æ ästd::endlä;
+  for @(@ WIR_Function æ&æfct æ:æ cu @)@ æ{æ
+    ästd::coutä æ<<æ "  Visiting function." æ<<æ ästd::endlä;
+    for @(@ WIR_BasicBlock æ&æbb æ:æ fct @)@ æ{æ
+      ästd::coutä æ<<æ "    Visiting basic block." æ<<æ ästd::endlä;
+      for @(@ WIR_Instruction æ&æins æ:æ bb @)@ æ{æ
+        ästd::coutä æ<<æ "      Visiting instruction." æ<<æ ästd::endlä;
+        for @(@ WIR_Operation æ&æop æ:æ ins @)@ æ{æ
+          ästd::coutä æ<<æ "        Visiting operation." æ<<æ ästd::endlä;
+          for @(@ WIR_Parameter æ&æparam æ:æ op @)@
+            ästd::coutä æ<<æ "          Visiting parameter." æ<<æ ästd::endlä;
+        æ}
+      }
+    }
+  }
+}æ
+\end{lstlisting}
+
+Since \gls{WIR} fully bases on standard C++ \gls{STL} data structures, of course all standard algorithms to find, test and to process \gls{WIR} objects can directly be used.
+This includes, amongst others, \texttt{std::find\_if}, \texttt{std::any\_of} or \texttt{std::accumulate}.
+The below example builds on \cref{lst:variadicconstruction} and demonstrates how to find a function with a specific name inside a compilation unit \texttt{c}.
+
+\begin{lstlisting}[style=code,float=h]
+// Find a WIR function having a given name.
+auto it =
+  ästd::find_ifä@(@
+    c.begin@()@, c.end@()@,
+    æ[&]æ@(@ const WIR_Function æ&æf @)@ æ{æ return@(@ f.getName@()@ == "foo" @)@; æ}æ @)@;
+\end{lstlisting}
+
+\gls{WIR} objects can be inserted into some object hierarchy, or they can exist outside such hierarchies.
+\cref{lst:listbb,lst:listins} of \cref{lst:listconstruction} show the declaration and default-construction of a basic block \texttt{b} and an instruction \texttt{i}.
+By default, both objects are not part of the object hierarchy that finally is constructed in \cref{lst:listconstruction}.
+Only after instruction \texttt{i} has been pushed into basic block \texttt{b} in \cref{lst:listpbins}, \texttt{i} then gets inserted.
+
+In order to determine the current status of some \gls{WIR} object, the \texttt{isInserted} method (cf. \cref{lst:isinserted} below) is provided.
+In analogy to \cref{chap:lists}, the code fragment below again refers just to the relationship between objects of class \texttt{WIR\_Instruction} and \texttt{WIR\_BasicBlock}.
+Of course, this can be generalized for all other parts of the \gls{WIR} object hierarchy.
+
+\begin{lstlisting}[style=code,float=h]
+// Determine whether an object is inserted into some basic block.
+@bool@ WIR_Instruction::isInserted@( void )@ const;Ü\label{lst:isinserted}Ü
+
+// Get the basic block containing an instruction.
+WIR_BasicBlock æ&æWIR_Instruction::getBasicBlock@( void )@ const;Ü\label{lst:getbb}Ü
+\end{lstlisting}
+
+The call \texttt{i.inserted()} immediately after \cref{lst:listins} of \cref{lst:listconstruction} would thus yield \texttt{false} as result, but \texttt{true} if it were placed after \cref{lst:listpbins} instead.
+As soon as objects are inserted into some \gls{WIR} hierarchy, the \texttt{get} family of methods can be used to obtain a reference of the containing object in the hierarchy (cf. \cref{lst:getbb} above).
+This way, a bottom-up traversal of the hierarchy depicted in \cref{fig:swmodel} is supported.
+These \texttt{get} methods fail with a runtime error if they are applied to a non-inserted object.
+
+\cleardoubleoddpage

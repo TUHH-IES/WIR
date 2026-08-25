@@ -1,0 +1,71 @@
+graph G {
+graph [rotate=90]
+21[label=< <table border="0"><tr><td>a2<br />(col 17)</td></tr></table> >,style=filled,fillcolor=burlywood1,shape=box]
+;
+22[label=< <table border="0"><tr><td>a3<br />(col 18)</td></tr></table> >,style=filled,fillcolor=orangered1,shape=box]
+;
+23[label=< <table border="0"><tr><td>a4<br />(col 19)</td></tr></table> >,style=filled,fillcolor=goldenrod1,shape=box]
+;
+24[label=< <table border="0"><tr><td>a5<br />(col 20)</td></tr></table> >,style=filled,fillcolor=darkolivegreen1,shape=box]
+;
+25[label=< <table border="0"><tr><td>a6<br />(col 21)</td></tr></table> >,style=filled,fillcolor=darkturquoise,shape=box]
+;
+26[label=< <table border="0"><tr><td>a7<br />(col 22)</td></tr></table> >,style=filled,fillcolor=blueviolet,shape=box]
+;
+27[label=< <table border="0"><tr><td>a12<br />(col 23)</td></tr></table> >,style=filled,fillcolor=darkviolet,shape=box]
+;
+28[label=< <table border="0"><tr><td>a13<br />(col 24)</td></tr></table> >,style=filled,fillcolor=deeppink1,shape=box]
+;
+29[label=< <table border="0"><tr><td>a14<br />(col 25)</td></tr></table> >,style=filled,fillcolor=chocolate1,shape=box]
+;
+30[label=< <table border="0"><tr><td>a15<br />(col 26)</td></tr></table> >,style=filled,fillcolor=darkorange2,shape=box]
+;
+33[label=< <table border="0"><tr><td colspan="2">e_6115</td></tr><tr><td>d_6117</td><td>d_6119</td></tr></table> >]
+;
+34[label=< <table border="0"><tr><td colspan="2">e_6128</td></tr><tr><td>d_6130</td><td>d_6132</td></tr></table> >]
+;
+34--33[arrowhead=none,arrowtail=none]
+;
+34--33[arrowhead=none,arrowtail=none]
+;
+33--21[arrowhead=none,arrowtail=none]
+;
+33--22[arrowhead=none,arrowtail=none]
+;
+33--23[arrowhead=none,arrowtail=none]
+;
+33--24[arrowhead=none,arrowtail=none]
+;
+33--25[arrowhead=none,arrowtail=none]
+;
+33--26[arrowhead=none,arrowtail=none]
+;
+33--27[arrowhead=none,arrowtail=none]
+;
+33--28[arrowhead=none,arrowtail=none]
+;
+33--29[arrowhead=none,arrowtail=none]
+;
+33--30[arrowhead=none,arrowtail=none]
+;
+34--21[arrowhead=none,arrowtail=none]
+;
+34--22[arrowhead=none,arrowtail=none]
+;
+34--23[arrowhead=none,arrowtail=none]
+;
+34--24[arrowhead=none,arrowtail=none]
+;
+34--25[arrowhead=none,arrowtail=none]
+;
+34--26[arrowhead=none,arrowtail=none]
+;
+34--27[arrowhead=none,arrowtail=none]
+;
+34--28[arrowhead=none,arrowtail=none]
+;
+34--29[arrowhead=none,arrowtail=none]
+;
+34--30[arrowhead=none,arrowtail=none]
+;
+}

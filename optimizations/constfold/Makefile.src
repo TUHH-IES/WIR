@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/constfold/wirconstfold.cc optimizations/constfold/wirconstfold.h

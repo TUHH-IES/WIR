@@ -1,0 +1,4 @@
+libwir_la_SOURCES      += analyses/controlflow/wircfg.cc analyses/controlflow/wircfg.h \
+                          analyses/controlflow/wircfganalysis.cc analyses/controlflow/wircfganalysis.h \
+                          analyses/controlflow/wircfgedgeproperty.h \
+                          analyses/controlflow/wircfgnodeproperty.cc analyses/controlflow/wircfgnodeproperty.h

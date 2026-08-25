@@ -1,0 +1,174 @@
+#
+#
+#  This script belongs to the
+#
+#    WCC Intermediate Representation (WIR) Framework
+#
+#  Permission to use this software is granted according to the license provided
+#  with this software distribution, and according to the attribution section in
+#  the README file found in the top-level directory of this distribution.
+#
+#   Copyright 2026, Heiko Falk.
+#
+#
+
+
+###############################################################################
+#
+#  System specification of the RISC-V implementation ESP32-C3 by Espressif
+#  (see doc/esp32-c3_datasheet_en.pdf).
+#
+#  For details about the syntax and semantics of the directives in this file,
+#  please refer to the doxygen documentation of class WIR_SystemConfig.
+#
+
+#
+# RISC-V ESP32-C3
+#
+[esp32-c3]
+type               = system
+
+
+#
+# Processor Core (ISA RV32IMC)
+#
+[CORE0]
+type               = core
+isa                = RV32IMC
+clockfreq          = 160000000
+#voltage            = ???
+
+
+#
+# Data Flash via cache
+#
+[DATA-FLASH-C]
+type               = memory
+origin             = 0x3C000000
+length             = 0x800000   # 8MB
+dynamic_allocation = 0
+attributes         = RWA        # read/write/allocate
+cycles             = 6
+memory_type        = FLASH
+sections           = .data .bss .sbss .sdata .zbss .zdata .rodata
+load               = .data_spm
+hierarchy          = CORE0
+
+
+#
+# Internal ROM 1 Data
+#
+[DATA-ROM-1]
+type               = memory
+origin             = 0x3FF00000
+length             = 0x20000    # 32K
+dynamic_allocation = 0
+attributes         = RW         # read/write
+cycles             = 0
+memory_type        = ROM
+hierarchy          = CORE0
+
+
+#
+# Internal SRAM 1 Data
+#
+[DATA-SRAM-1]
+type               = memory
+origin             = 0x3FC80000
+length             = 0x60000    # 384K
+dynamic_allocation = 1
+attributes         = RWA        # read/write/allocate
+cycles             = 1
+memory_type        = SRAM
+sections           = .data_spm
+hierarchy          = CORE0
+
+
+#
+# Internal ROM 0 Instruction
+#
+[CODE-ROM-0]
+type               = memory
+origin             = 0x40000000
+length             = 0x40000    # 256K
+dynamic_allocation = 0
+attributes         = RWX        # read/write/execute
+cycles             = 0
+memory_type        = ROM
+hierarchy          = CORE0
+
+
+#
+# Internal ROM 1 Instruction
+#
+[CODE-ROM-1]
+type               = memory
+origin             = 40040000
+length             = 0x20000    # 128K
+dynamic_allocation = 0
+attributes         = RWX        # read/write/execute
+cycles             = 0
+memory_type        = ROM
+hierarchy          = CORE0
+
+
+
+#
+# Internal SRAM 0 Instruction
+#
+[CODE-SRAM-0]
+type               = memory
+origin             = 0x4037C000
+length             = 0x2000     # 16K
+dynamic_allocation = 1
+attributes         = RWX        # read/write/execute
+cycles             = 1
+memory_type        = SRAM
+sections           = .stack
+hierarchy          = CORE0
+
+
+#
+# Internal SRAM 1 Instruction
+#
+[CODE-SRAM-1]
+type               = memory
+origin             = 0x40380000
+length             = 0x60000    # 384K
+dynamic_allocation = 1
+attributes         = RWXA       # read/write/execute/allocate
+cycles             = 1
+memory_type        = SRAM
+sections           = .text_spm
+hierarchy          = CORE0
+
+
+#
+# RTC Fast Memory (Instruction/Data)
+#
+#[RTC-SRAM]
+#type               = memory
+#origin             = 0x50000000
+#length             = 0x4000    # 8K
+#dynamic_allocation = 0
+#attributes         = RWX       # read/write/execute
+#cycles             = 1
+#memory_type        = SRAM
+#sections           = .text .data
+#hierarchy          = CORE0
+
+
+#
+# Instruction Flash via cache
+#
+[CODE-FLASH-C]
+type               = memory
+origin             = 0x42000000
+length             = 0x800000   # 8MB
+dynamic_allocation = 0
+attributes         = RWXA       # read/write/execute/allocatable
+cycles             = 6
+memory_type        = FLASH
+sections           = .text
+load               = .text_spm
+hierarchy          = CORE0

@@ -1,0 +1,164 @@
+\documentclass[10pt,twoside,abstract=true,numbers=noenddot,
+               headheight=14.4pt,footheight=20.2641pt]{scrreprt}
+
+\input{0-PREAMBLE/packages}
+\input{version}
+\input{0-PREAMBLE/commands}
+\input{0-PREAMBLE/glossary}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+
+\titlehead{WIR \WIRVERSION}
+\title{The WCC Compiler Intermediate Representation\\[2mm] (WIR)\\[4mm]}
+\subtitle{Build \& Installation Guide\\[2mm]User's Guide\\[2mm]Retargeting Guide\\[2mm]Developer's Guide}
+\author{Heiko Falk}
+\date{\today}
+\publishers{\includegraphics[scale=0.25]{logo_es_text.png}\\[3mm]Institute of Embedded Systems\\[3mm]Hamburg University of Technology (TUHH)}
+
+\maketitle
+
+\thispagestyle{empty}
+\textbf{\large Contributors:}
+\begin{itemize}
+\input{authors}
+\end{itemize}
+\cleardoubleoddpage
+
+\hypersetup{pageanchor=true}
+
+\pagenumbering{roman}
+\setcounter{page}{1}
+
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{Contents}
+\tableofcontents
+\cleardoubleoddpage
+
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Figures}
+\listoffigures
+\cleardoubleoddpage
+
+\phantomsection
+\addcontentsline{toc}{chapter}{List of Tables}
+\listoftables
+\cleardoubleoddpage
+
+\phantomsection
+\addcontentsline{toc}{chapter}{Listings}
+\lstlistoflistings
+\cleardoubleoddpage
+
+\input{0-PREAMBLE/acronyms}
+
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\input{1-INTRODUCTION/chapter}
+
+%=========================================================================
+\setpartpreamble[ul]{
+  \begin{abstract}
+    Purpose of this guide is to explain with some actual examples how to compile and use \gls{WIR} when it has just freshly been checked out of its source code repository.
+
+    \cref{chap:prerequisites} (\cpageref{chap:prerequisites} ff.) specifies both the mandatory and optional dependencies that must be fulfilled in order to build and use \gls{WIR}.
+    After that, \cref{chap:directory} (\cpageref{chap:directory} ff.) gives a quick overview of the \gls{WIR} directory structure.
+    The procedures required to bootstrap and configure the \gls{WIR} software package are described in \cref{chap:bootstrap} (\cpageref{chap:bootstrap} ff.).
+    How to finally build and install \gls{WIR} as well as first steps to use the built libraries are presented in \cref{chap:build} (\cpageref{chap:build} ff.).
+  \end{abstract}
+}
+
+\part{Build \& Installation Guide}
+\label{part:installation}
+\cleardoubleoddpage
+
+\input{2-PREREQUISITES/chapter}
+\input{3-DIRECTORY/chapter}
+\input{4-BOOTSTRAP/chapter}
+\input{5-BUILD/chapter}
+%=========================================================================
+
+
+%=========================================================================
+\setpartpreamble[ul]{
+  \begin{abstract}
+    Purpose of this guide is to explain how to use \gls{WIR} in some own compiler project.
+    For this reason, this guide describes the most important concepts driving the design of the public interfaces of central \gls{WIR} classes.
+
+    \cref{chap:lists} (\cpageref{chap:lists} ff.) presents the general design of list-based data structures within \gls{WIR}.
+    Techniques to construct and traverse complex hierarchies of \gls{WIR} objects are described in \cref{chap:construction} (\cpageref{chap:construction} ff.).
+    The properties and features of all classes constituting the \gls{WIR} software model are subject of \cref{chap:swmodel} (\cpageref{chap:swmodel} ff.).
+    \cref{chap:hwmodel} (\cpageref{chap:hwmodel} ff.) discusses the structures and properties of all classes forming the \gls{WIR} hardware model.
+    How both the software and the hardware model are combined to represent complete hardware/software systems is presented in \cref{chap:sysmodel} (\cpageref{chap:sysmodel} ff.).
+    \cref{chap:setsmaps} (\cpageref{chap:setsmaps} ff.) describes elementary deterministic data structures that base on unique numerical identifiers and that regularly appear in the public \gls{API} of the \gls{WIR} library.
+    How to generate actual assembly code from the \gls{WIR} library is discussed in \cref{chap:codegen} (\cpageref{chap:codegen} ff.).
+    The code analyses that are integral part of \gls{WIR} are introduced in \cref{chap:analysis} (\cpageref{chap:analysis} ff.), and \cref{chap:optimization} is devoted to WIR's code optimizations (\cpageref{chap:optimization} ff.).
+    Finally, \cref{chap:debug} (\cpageref{chap:debug} ff.) briefly introduces \gls{WIR}'s introspection facilities.
+  \end{abstract}
+}
+
+\part{User's Guide}
+\label{part:use}
+\cleardoubleoddpage
+
+\input{6-LISTS/chapter}
+\input{7-CONSTRUCTION/chapter}
+\input{8-SWMODEL/chapter}
+\input{9-HWMODEL/chapter}
+\input{10-SYSMODEL/chapter}
+\input{11-SETSMAPS/chapter}
+\input{12-CODEGEN/chapter}
+\input{13-ANALYSES/chapter}
+\input{14-OPTIMIZATIONS/chapter}
+\input{15-DEBUGGING/chapter}
+%=========================================================================
+
+
+%=========================================================================
+\setpartpreamble[ul]{
+  \begin{abstract}
+    Retargetability refers to the concept that a model of a system's architecture or of an \acrfull{ISA} is not hard-wired inside a compiler, but instead allows for simple and lightweight extensions and changes.
+    Purpose of this guide thus is to describe the various steps required to extend the \gls{WIR} library by support for new systems or target \glspl{ISA}.
+
+    The individual steps in order to retarget \gls{WIR} towards a completely new processor model are presented in \cref{chap:procretarget} (\cpageref{chap:procretarget} ff.).
+    Novel processor models should of course also benefit from the manifold analyses and optimizations that are integral part of the \gls{WIR} library.
+    While most of them are entirely generic and processor-independent, some others need to be retargeted.
+    \cref{chap:anaretarget} (\cpageref{chap:anaretarget} ff.) covers the retargeting aspects of the \gls{WIR} code analyses, while \cref{chap:optretarget} (\cpageref{chap:optretarget} ff.) does the same for its code optimizations.
+  \end{abstract}
+}
+
+\part{Retargeting Guide}
+\label{part:retarget}
+\cleardoubleoddpage
+
+\input{16-PROCRETARGET/chapter}
+\input{17-ANARETARGET/chapter}
+\input{18-OPTRETARGET/chapter}
+%=========================================================================
+
+
+%=========================================================================
+\part{Developer's Guide}
+\label{part:develop}
+\cleardoubleoddpage
+
+\begin{itemize}
+  \item \TODO{Registry? Eher nicht in User's Guide da registry nicht public ist.}
+\end{itemize}
+
+%=========================================================================
+
+
+%=========================================================================
+\newpage
+\phantomsection
+\bookmarksetup{startatroot}
+\addtocontents{toc}{\bigskip}
+\addcontentsline{toc}{chapter}{Bibliography}
+\printbibliography
+%=========================================================================
+
+\end{document}

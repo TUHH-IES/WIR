@@ -1,0 +1,46 @@
+#
+#
+#  This script belongs to the
+#
+#    WCC Intermediate Representation (WIR) Framework
+#
+#  Permission to use this software is granted according to the license provided
+#  with this software distribution, and according to the attribution section in
+#  the README file found in the top-level directory of this distribution.
+#
+#   Copyright 2015 - 2026, Heiko Falk.
+#
+#
+
+
+###############################################################################
+#
+#  System specification of a simple, generic MIPS architecture.
+#  This file does not specify some real processor architecture but is solely
+#  used for demonstration purposes.
+#
+#  For details about the syntax and semantics of the directives in this file,
+#  please refer to the doxygen documentation of class WIR_SystemConfig.
+#
+
+#
+# Processor core (ISA TC1.3)
+#
+[CORE0]
+type               = core
+isa                = WIR generic
+clockfreq          = 150000000
+voltage            = 3.3
+
+
+#
+# One flat unified, uncached main memory
+#
+[RAM]
+type               = memory
+origin             = 0x0
+length             = 0x100000
+attributes         = RWXA       # read/write/execute/allocate
+cycles             = 1
+sections           = .text .init .eh_frame .ctors .dtors .traptab .inttab .rodata .data .bss
+hierarchy          = CORE0

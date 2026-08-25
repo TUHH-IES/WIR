@@ -1,0 +1,217 @@
+%=========================================================================
+\chapter{Introspection of WIR}
+\label{chap:debug}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+The classes, data structures and algorithms of the \gls{WIR} library are complex so that users might wish to get a deeper understanding of its inner workings without having to do a deep dive into its C++ code base and without having to rebuild \gls{WIR} completely.
+Typical questions that come up when using \gls{WIR} are, e.g.: When are objects of a certain class created or destroyed? How does a complex analysis or optimization algorithm from \cref{chap:analysis,chap:optimization} behave in more detail? How does the control or data flow graph look like?
+
+\gls{WIR} comes with a convenient mechanism allowing to do such kinds of introspection of the library's behavior without having to change the code base.
+These mechanisms are called \emph{debug macros} in the following.
+By using a simple configuration file, the desired output can selectively be turned on or off, giving the user full control over the amount of created introspection output.
+
+The entire debug macro infrastructure gets activated only if a \gls{WIR} build is configured with option \texttt{-{}-enable-wir- debugmacros} (see \cref{tab:configure} on \cpageref{tab:configure}).
+By default, the whole infrastructure is deactivated since it has a noticeable performance impact.
+The rest of this chapter thus assumes a \gls{WIR} build configured with option \texttt{-{}-enable-wir-debugmacros}.
+\begin{wirNote}
+For release quality builds of the \gls{WIR} software package at the highest optimization level of the host compiler, users typically should not activate the debug macros.
+\end{wirNote}
+
+\cref{sec:debugmacros} first describes the general infrastructure provided by the debug macros.
+After that, \cref{sec:wirmacros} presents how to use the debug macros integrated into the \gls{WIR} code for an in-depth introspection.
+
+
+%-------------------------------------------------------------------------
+\section{Debug Macro Framework}
+\label{sec:debugmacros}
+%-------------------------------------------------------------------------
+
+The term debug macros originates from a couple of C++ preprocessor macros that are all declared in file \texttt{WIR/ LIBUSEFUL/libuseful/debugmacros.h}.
+The entire framework consists of two parts:
+\begin{itemize}
+  \item the consequent and pervasive use of the debug macros in the C++ code of \gls{WIR} by the developers, and
+  \item the dynamic and flexible configuration of actual introspection output to be produced for a \gls{WIR} user based on configuration file \texttt{wir.conf} that by default resides in directory \texttt{WIR/DEBUGMACRO\_CONF} (see configuration option \texttt{-{}-with-debugmacro-configuration} from \cref{tab:configure}).
+\end{itemize}
+
+The following discussion and the excerpt from \texttt{debugmacros.h} shown in \cref{lst:debugmacros} focuses on the most frequently used debug macros only which are heavily used by \gls{WIR}.
+For a full description of all available debug macros, the interested reader is referred to header file \texttt{WIR/LIBUSEFUL/libuseful/debugmacros.h}.
+
+\begin{lstlisting}[style=code,float=ht,caption={Most Relevant Debug Macros from \texttt{WIR/LIBUSEFUL/libuseful/debugmacros.h}},label=lst:debugmacros]
+// Start debugging for the currently active C++ scope identified by the given activation name.
+^#define DSTART^( ACTIVATIONNAME ) [...]Ü\label{lst:debugmacros1}Ü
+
+// Produce debug output for the currently active C++ scope.
+^#define DOUT^( ... ) [...]Ü\label{lst:debugmacros2}Ü
+
+// Execute any arbitrary debugging code for the currently active C++ scope.
+^#define DACTION^( ACTIONCODE ) [...]Ü\label{lst:debugmacros3}Ü
+\end{lstlisting}
+
+The most important debug macro is \texttt{DINIT} shown in \cref{lst:debugmacros1}.
+It expects a string literal as argument which serves as so-called activation name.
+The purpose of \texttt{DSTART} is to selectively activate the debugging of a complete C++ scope if the user has specified this in configuration file \texttt{wir.conf}.
+Here, a C++ scope is any region in the C++ code base of \gls{WIR} between curly brackets \texttt{\{\ ...\ \}}.
+For such a scope featuring \texttt{DSTART}, a message is printed out whenever this scope is entered during the execution of a user's \gls{WIR}-based application.
+Likewise, an exit message is printed whenever such a scope is left, i.e., the user's application reaches the scope's closing \texttt{\}} bracket.
+
+In order to give the user control for which scopes such enter and exit messages shall be printed, the activation name is used which serves as a unique identifier for debugging-relevant scopes.
+The string literals used as activation names for \texttt{DSTART} all-over \gls{WIR} are hard-coded in the C++ code of \gls{WIR}.
+By putting the activation name strings of the user's interest into the abovementioned configuration file \texttt{wir.conf}, debugging of the so-specified scope is activated and enter and exit messages are created.
+If a scope's activation name is not present in the user's configuration file, no debug output will be produced for a scope.
+
+Internally, the debug macros dynamically organize activation names in a stack.
+Whenever a scope featuring \texttt{DSTART} is entered while executing a user's application, the scope's activation name is put on top of the current stack.
+Similarly, the top of the stack is removed when leaving a \texttt{DSTART} scope.
+This allows to properly keep track of the nesting of scopes while debugging \gls{WIR} applications that very frequently execute one scope from within another in a deeply nested fashion.
+
+Besides such enter and exit messages, it regularly is desirable to print additional messages for debugging purposes.
+This can include, e.g., simple messages (\texttt{"Hello world."}) indicating that a certain position in the code has been reached, or messages printing the current contents of important variables etc.
+For this purpose, the \texttt{DOUT} macro (\cref{lst:debugmacros2}) is used within \gls{WIR}.
+It accepts a variadic number of arguments that are all treated as regular C++ code serving to produce output to a \texttt{std::ostream}.
+This way, complex debug messages can be created as follows:
+\begin{lstlisting}[style=code]
+DOUT( "Current address: 0x" æ<<æ ästd::hexä æ<<æ addr æ<<æ "." << ästd::decä æ<<æ ästd::endlä );
+\end{lstlisting}
+\texttt{DOUT} only generates actual output if it is part of a scope featuring \texttt{DSTART} and if the activation name provided to \texttt{DSTART} shows up in the user's configuration file.
+
+Finally, it might be necessary to execute complex code for debugging purposes instead of printing simple messages.
+This usually is the case when data structures shall be inspected and checked for sanity.
+This kind of debugging is supported by macro \texttt{DACTION} from \cref{lst:debugmacros3}.
+It expects any kind of C++ code to be executed only if, once again, the activation name of the scope is configured by the user.
+The following example displays the names of all childs of some register \texttt{reg} only if debugging of the scope containing this \texttt{DACTION} is desired by the user:
+\begin{lstlisting}[style=code]
+DACTION(
+  for ( WIR_VirtualRegister æ&æchild : reg.getChilds() )
+    DOUT( "Current child register: " æ<<æ child.getName() æ<<æ ästd::endlä ); );
+\end{lstlisting}
+
+For \gls{WIR} builds configured with disabled debug macros, all preprocessor definitions from file \texttt{debugmacros.h} get replaced by empty dummies so that the manifold occurrences of \texttt{DSTART}, \texttt{DOUT} and \texttt{DACTION} within the \gls{WIR} library leave absolutely no trace in this case.
+
+Debug macro configuration files are simple plain-text files that can be edited by the user in any text editor.
+They are interpreted line by line, empty lines and comment lines starting with "\texttt{\#}" or "\texttt{//}" are ignored.
+One line in a debug macro configuration file now simply contains exactly one activation name of some scope to be debugged.
+The strings used in the context of \texttt{DSTART} and within a user's configuration file are always case-sensitive, and they are interpreted literally, i.e., spacing or punctuation also matters.
+Thus, the configuration file needs to list the exact and identical strings as they show up in the \texttt{DSTART} directives to be debugged.
+
+
+%-------------------------------------------------------------------------
+\section{WIR Debug Macros}
+\label{sec:wirmacros}
+%-------------------------------------------------------------------------
+
+As mentioned earlier, \gls{WIR} by default considers the debug macro configuration file \texttt{WIR/DEBUGMACRO\_CONF/wir. conf}.
+For the user's convenience, a configuration template listing all currently existing and supported activation names is provided in file \texttt{WIR/DEBUGMACRO\_CONF/wir.conf.bak}.
+Activation names are all grouped by their associated \gls{WIR} classes.
+This template gives an overview for which parts of \gls{WIR} debugging can be activated.
+By copying and pasting strings from the template to \texttt{wir.conf}, an appropriate configuration can be crated easily.
+
+As can be seen, these activation names regularly refer to the various methods of \gls{WIR} classes, including their argument and return types.
+This results from the fact that within the entire C++ code base of the \gls{WIR} library, all methods always consequently start with a dedicated \texttt{DSTART} directive.
+Like this, the begin and end of execution of individual \gls{WIR} methods can be traced by the user.
+
+\cref{lst:variadicconstruction} on \cpageref{lst:variadicconstruction} showed an example for the variadic construction of object hierarchies within \gls{WIR}.
+When using the following debug macro configuration:
+\begin{lstlisting}[style=code]
+WIR_CompilationUnit::WIR_CompilationUnit(WIR_Function&&, Args&& ...)
+WIR_Function::WIR_Function(string&&)
+WIR_BasicBlock& WIR_Function::pushBackBasicBlock(WIR_BasicBlock&&)
+WIR_BasicBlock::WIR_BasicBlock(WIR_Instruction&&, Args&& ...)
+WIR_Instruction::WIR_Instruction(WIR_Operation&&, Args&& ...)
+WIR_Operation::WIR_Operation(ÜconstÜ WIR_BaseProcessor::OpCode&, ÜconstÜ WIR_BaseProcessor::OperationFormat&, Args&& ...)
+\end{lstlisting}
+the creation of the various objects by the example program can be observed.
+Compiling and executing the example from \cref{lst:variadicconstruction} with the above configuration file in place produces the following output:
+\begin{lstlisting}[style=code]
+^--> enter^ WIR_Function::WIR_Function(string&&) (0)
+Ü\color{red}<-{}-  exitÜ WIR_Function::WIR_Function(string&&) (0)
+^--> enter^ WIR_CompilationUnit::WIR_CompilationUnit(WIR_Function&&, Args&& ...) (0)
+Ü\color{red}<-{}-  exitÜ WIR_CompilationUnit::WIR_CompilationUnit(WIR_Function&&, Args&& ...) (0)
+^--> enter^ WIR_Operation::WIR_Operation(ÜconstÜ WIR_BaseProcessor::OpCode&, ÜconstÜ WIR_BaseProcessor::OperationFormat&, Args&& ...) (0)
+Ü\color{red}<-{}-  exitÜ WIR_Operation::WIR_Operation(ÜconstÜ WIR_BaseProcessor::OpCode&, ÜconstÜ WIR_BaseProcessor::OperationFormat&, Args&& ...) (0)
+^--> enter^ WIR_Instruction::WIR_Instruction(WIR_Operation&&, Args&& ...) (0)
+Ü\color{red}<-{}-  exitÜ WIR_Instruction::WIR_Instruction(WIR_Operation&&, Args&& ...) (0)
+^--> enter^ WIR_Operation::WIR_Operation(ÜconstÜ WIR_BaseProcessor::OpCode&, ÜconstÜ WIR_BaseProcessor::OperationFormat&, Args&& ...) (0)
+Ü\color{red}<-{}-  exitÜ WIR_Operation::WIR_Operation(ÜconstÜ WIR_BaseProcessor::OpCode&, ÜconstÜ WIR_BaseProcessor::OperationFormat&, Args&& ...) (0)
+^--> enter^ WIR_Instruction::WIR_Instruction(WIR_Operation&&, Args&& ...) (0)
+Ü\color{red}<-{}-  exitÜ WIR_Instruction::WIR_Instruction(WIR_Operation&&, Args&& ...) (0)
+^--> enter^ WIR_BasicBlock::WIR_BasicBlock(WIR_Instruction&&, Args&& ...) (0)
+Ü\color{red}<-{}-  exitÜ WIR_BasicBlock::WIR_BasicBlock(WIR_Instruction&&, Args&& ...) (0)
+^--> enter^ WIR_BasicBlock& WIR_Function::pushBackBasicBlock(WIR_BasicBlock&&) (0)
+Ü\color{red}<-{}-  exitÜ WIR_BasicBlock& WIR_Function::pushBackBasicBlock(WIR_BasicBlock&&) (0)
+\end{lstlisting}
+
+Changing the previous debug macro configuration to:
+\begin{lstlisting}[style=code]
+ÜvoidÜ WIR_System::createComponents(ÜconstÜ string&)
+\end{lstlisting}
+and re-executing the very same test program now yields the following output:
+\begin{lstlisting}[style=code]
+^--> enter^ ÜvoidÜ WIR_System::createComponents(ÜconstÜ string&) (1)
+  Reading system configuration file '/tmp/WIR/arch/generic/genericmips.sys'.
+  Created ÜnewÜ processor core 'CORE0'
+    Instruction set architecture: 'WIR generic'
+    Clock frequency: 150000000 Hz
+    Voltage: 3.3 V
+  Created ÜnewÜ memory region 'RAM'
+    Base address: 0x0
+    Length: 0x100000
+    Attributes: 0xf
+    Delay: 1
+    Memory hierarchy: { 'CORE0' }
+Ü\color{red}<-{}-  exitÜ ÜvoidÜ WIR_System::createComponents(ÜconstÜ string&) (1)
+\end{lstlisting}
+As can be seen from this example, just editing the plain-text configuration file helps to display completely different output, now showing the details how a \gls{WIR} system is set up for the generic MIPS architecture from \cref{ssec:mipsmodel}.
+
+Besides activation names referring to complete methods of the \gls{WIR} code base, a few particular ones are provided for the introspection of complex analyses and optimizations.
+They are summarized in \cref{lst:advancedmacros}.
+The control tree iteratively constructed during structural control flow analysis (see \cref{sec:structcflow} at \cpageref{sec:structcflow}) can be visualized using the activation names from \cref{lst:advancedmacros1,lst:advancedmacros2}.
+The former shows the current control tree after each individual iteration of the analysis, while the latter shows only the finally created result.
+
+\cref{lst:advancedmacros3,lst:advancedmacros4} show the activation names relating to the visualization of the bit-true \gls{DFG} from \cref{def:bitdfg} on \cpageref{def:bitdfg}.
+The first one enables the graph visualization right after the top-down analysis, i.e., the forward data flow analysis.
+The final bit-true \gls{DFG} resulting from both top-down and bottom-up backward analysis can be shown using the activation name from \cref{lst:advancedmacros4}.
+
+Due to its inherent complexity, various debugging facilities are provided for the graph coloring-based register allocation described in \cref{sec:optregalloc} on \cpageref{sec:optregalloc}.
+Most of them serve to visualize the interference graph during the various steps of the graph coloring algorithm: immediately after having built the initial, uncolored interference graph (\cref{lst:advancedmacros5}); after graph simplification, once showing only the remaining non-simple nodes (\cref{lst:advancedmacros6}), or once showing both simple and non-simple nodes (\cref{lst:advancedmacros7}); after coalescing of graph nodes (\cref{lst:advancedmacros8}); after coloring the graph (\cref{lst:advancedmacros9}); and finally when applying stack coalescing (\cref{lst:advancedmacros10}).
+
+\begin{lstlisting}[style=code,float=ht,caption={Activation Names for the In-Depth Introspection of WIR Analyses and Optimizations},label=lst:advancedmacros]
+Üvirtual voidÜ WIR_StructuralAnalysis::runAnalysis(WIR_Function&).visualizeÜ\label{lst:advancedmacros1}Ü
+Üvirtual voidÜ WIR_StructuralAnalysis::runAnalysis(WIR_Function&).ÜfinalÜ.visualizeÜ\label{lst:advancedmacros2}Ü
+
+Üvirtual voidÜ WIR_BitDFA::runAnalysis(WIR_Function&).topdown.visualizeÜ\label{lst:advancedmacros3}Ü
+Üvirtual voidÜ WIR_BitDFA::runAnalysis(WIR_Function&).bottomup.visualizeÜ\label{lst:advancedmacros4}Ü
+
+ÜvoidÜ WIR_GraphColoring::build(WIR_Function&, WIR_InterferenceGraph&).visualizeÜ\label{lst:advancedmacros5}Ü
+Üvirtual voidÜ WIR_GraphColoring::runOptimization(WIR_Function&).simplified.visualizeÜ\label{lst:advancedmacros6}Ü
+Üvirtual voidÜ WIR_GraphColoring::runOptimization(WIR_Function&).simplified.visualizeFullÜ\label{lst:advancedmacros7}Ü
+WIR_BaseRegister& WIR_GraphColoring::combine(ÜconstÜ WIR_BaseRegister&, ÜconstÜ WIR_BaseRegister&, WIR_InterferenceGraph&).visualizeÜ\label{lst:advancedmacros8}Ü
+Üvirtual voidÜ WIR_GraphColoring::runOptimization(WIR_Function&).colored.visualizeFullÜ\label{lst:advancedmacros9}Ü
+ÜvoidÜ WIR_GraphColoring::computeStackLocations(ÜconstÜ WIR_Function&).visualizeÜ\label{lst:advancedmacros10}Ü
+WIR_GraphColoring.worklistsÜ\label{lst:advancedmacros11}Ü
+WIR_GraphColoring.invariantsÜ\label{lst:advancedmacros12}Ü
+
+WIR_JumpCorrection.invariantsÜ\label{lst:advancedmacros13}Ü
+TC_JumpCorrection.invariantsÜ\label{lst:advancedmacros14}Ü
+
+ÜvoidÜ WIR_SchedulingRegion::buildDG().visualizeÜ\label{lst:advancedmacros15}Ü
+\end{lstlisting}
+
+According to~\cite[chapter~16.3]{Much97}, the \gls{WIR} graph coloring is implemented as a typical worklist algorithm.
+The processing of the various worklists, i.e., when operations or registers are added to or removed from certain worklists can be monitored by configuring the activation name from \cref{lst:advancedmacros11}.
+Furthermore, \cite[chapter~16.3]{Much97} and~\cite[chapter~11]{Appel04} formulate a couple of invariants, i.e., structural properties of the interference graph and/or the worklists that must always hold.
+The explicit verification of all these invariants (and many others, going beyond the textbooks cited above) and thus in-depth sanity checks of all algorithms can be turned on using the activation name from \cref{lst:advancedmacros12}.
+However, the computational overhead of this introspection of worklists and invariants is extremely high.
+Even if \cref{lst:advancedmacros11,lst:advancedmacros12} are not active, the very frequent executions of \texttt{DSTART} and the corresponding comparisons of activation names with configuration file contents still lead to a noticeable performance degradation.
+For this reason and in order to obtain a reasonable performance of register allocation even for \gls{WIR} builds configured with \texttt{-{}-enable-wir-debugmacros}, these two activation names are ``mechanically'' turned off completely by default.
+Should a \gls{WIR} user wish to have a closer look at worklists or invariants, it thus is not sufficient to just copy \cref{lst:advancedmacros11,lst:advancedmacros12} into configuration file \texttt{wir.conf}.
+Instead, the definition of macro \texttt{ENABLE\_INVARIANTS} at the top of file \texttt{WIR/optimizations/gcregallocation/wirgraphcoloring.cc} needs to be activated and the \gls{WIR} library rebuilt once afterwards.
+
+The very same applies to invariants that check the memory layout and start addresses of basic blocks during jump correction (see \cref{sec:optjumps} on \cpageref{sec:optjumps}).
+This checking of invariants is in general supported by the activation names from \cref{lst:advancedmacros13,lst:advancedmacros14}.
+But again and for the same reasons as discussed in the previous paragraph, the macro \texttt{ENABLE\_INVARIANTS} must be defined in files \texttt{WIR/optimizations/jumpcorrection/wirjumpcor\-rec\-tion.cc} and \texttt{WIR/arch/tricore/optimizations/jumpcorrection/tcjumpcorrection.cc}, resp.
+
+Last but not least, the activation name from \cref{lst:advancedmacros15} serves to visualize the dependence graph showing \gls{RAW}, \gls{WAR} and many other dependencies between \gls{WIR} operations during instruction scheduling, cf. \cref{sec:optsched} on \cpageref{sec:optsched}.
+
+
+\cleardoubleoddpage

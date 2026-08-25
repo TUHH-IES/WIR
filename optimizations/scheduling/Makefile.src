@@ -1,0 +1,8 @@
+libwir_la_SOURCES      += optimizations/scheduling/wirblockschedulingregion.cc optimizations/scheduling/wirblockschedulingregion.h \
+                          optimizations/scheduling/wirdgedgeproperty.h \
+                          optimizations/scheduling/wirlocalscheduling.cc optimizations/scheduling/wirlocalscheduling.h \
+                          optimizations/scheduling/wirmaxdelaypriority.cc optimizations/scheduling/wirmaxdelaypriority.h \
+                          optimizations/scheduling/wirmobilitypriority.cc optimizations/scheduling/wirmobilitypriority.h \
+                          optimizations/scheduling/wirnoofsuccspriority.cc optimizations/scheduling/wirnoofsuccspriority.h \
+                          optimizations/scheduling/wirschedulingpriority.cc optimizations/scheduling/wirschedulingpriority.h \
+                          optimizations/scheduling/wirschedulingregion.cc optimizations/scheduling/wirschedulingregion.h

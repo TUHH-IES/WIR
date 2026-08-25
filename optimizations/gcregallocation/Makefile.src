@@ -1,0 +1,4 @@
+libwir_la_SOURCES      += optimizations/gcregallocation/wirgraphcoloring.cc optimizations/gcregallocation/wirgraphcoloring.h \
+                          optimizations/gcregallocation/wirigraphedgeproperty.h \
+                          optimizations/gcregallocation/wirigraphnodeproperty.h \
+                          optimizations/gcregallocation/wirinterferencegraph.cc optimizations/gcregallocation/wirinterferencegraph.h

@@ -1,0 +1,146 @@
+%=========================================================================
+\chapter{Directory Structure}
+\label{chap:directory}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+\cref{fig:wircodedirectory} depicts the overall directory structure of the \gls{WIR} software package.
+The top-level directory \texttt{WIR} contains a couple of files specifying authors having contributed to the software, the license from \cref{sec:license}, a brief readme file, and the documentation about the major release versions of \gls{WIR}.
+The most important file in this top-level directory is \texttt{Makefile.bootstrap} which serves to bootstrap the software package after it has been checked out of its repository (cf. \cref{sec:bootstrap}).
+
+\begin{figure}[!t]
+  \begin{center}
+    \begin{forest}
+      pic dir tree,
+      pic root,
+      for tree={% folder icons by default; override using file for file icons
+        directory,
+      },
+      [WIR
+        [DEBUGMACRO\_CONF]
+        [LIBUSEFUL]
+        [analyses
+          [availabledefinitions]
+          [bit]
+          [\dots]
+        ]
+        [arch
+          [arm]
+          [generic]
+          [riscv]
+          [tricore]
+        ]
+        [containers]
+        [doc]
+        [flowfacts]
+        [optimizations
+          [constfold]
+          [constprop]
+          [\dots]
+        ]
+        [tests]
+        [wir
+          [wir.h, file]
+          [wircompilationunit.cc / wircompilationunit.h, file]
+          [wirfunction.cc / wirfunction.h, file]
+          [\dots, file]
+        ]
+        [AUTHORS, file]
+        [LICENSE, file]
+        [Makefile.bootstrap, file]
+        [README, file]
+        [Releases, file]
+      ]
+    \end{forest}
+  \end{center}
+  \caption{Directory Structure of WIR Software Package}
+  \label{fig:wircodedirectory}
+\end{figure}
+
+The entire C++ code base of \gls{WIR} is structured into the various sub-directories shown in \cref{fig:wircodedirectory}.
+Here, sub-directory \texttt{wir} plays a central role as it contains the header files and implementations of all generic and processor-independent classes of \gls{WIR}.
+This in particular includes all the components introduced in \cref{sec:overview} and depicted in \cref{fig:wirsystem,fig:swmodel,fig:hwmodel1} like, e.g., \texttt{WIR\_CompilationUnit}, \texttt{WIR\_Function} or \texttt{WIR\_Processor}.
+
+All \gls{ISA}-specific parts of \gls{WIR} (cf. \cref{fig:hwmodel2}) reside in the \texttt{arch} sub-directory.
+All currently supported \gls{WIR} hardware models as given in \cref{tab:AnaOptISA} can be found here, grouped into sub-directories \texttt{arch/arm} (ARMv4 -- ARMv6), \texttt{arch/generic} (MIPS SPIM), \texttt{arch/riscv} (RV32IMFDC), and \texttt{tricore} (TriCore v1.3 and v1.3.1).
+
+The generic and \gls{ISA}-independent implementations of the various code analyses and optimizations introduced in \cref{sec:keyfeatures} can be found in the sub-directories \texttt{analyses} and \texttt{optimizations}, resp.
+Again, these sub-directories contain a dedicated folder for the implementation of each individual analysis or optimization like, e.g., \texttt{analyses/ availabledefinitions} or \texttt{optimizations/constfold}.
+
+Sub-directory \texttt{containers} comprises a large part of the various container classes for meta-data that are used to attach, e.g., analysis results to \gls{WIR} objects (cf. \cref{sec:keyfeatures}).
+For example, the classes storing the results of available definitions, domination, or liveness analyses can be found here.
+A special category of meta-data are so-called flow facts which reside in sub-directory \texttt{flowfacts}.
+Flow facts are meta-information which provide hints about the set of possible control flow paths of a program~\cite{Kirn03}.
+Such flow facts are especially needed for static timing analysis of code, i.e., for \gls{WCET} analysis.
+\gls{WIR} provides flow facts allowing to annotate, e.g., minimum and maximum loop iteration bounds or inequations over execution frequencies of blocks.
+
+All unit tests targeting the validation of the generic, processor-independent features of \gls{WIR} reside in sub-directory \texttt{tests}.
+This covers, e.g., the creation and traversal of objects forming the \gls{WIR} software model (cf. \cref{fig:swmodel}), or the inspection of control trees produced by structural analysis.
+Since even such generic tests at some stage must refer to some actual processor's machine operations, all these unit tests build on the generic MIPS hardware model due to its simplicity.
+
+Sub-directory \texttt{doc} is the place where the entire documentation of \gls{WIR} can be found, esp. the optionally generated browsable HTML documentation (cf. \cref{sec:configure}) as well as this manual and its \LaTeX\ sources.
+
+Finally, sub-directory \texttt{DEBUGMACRO\_CONF} contains configuration files that can be used to control the activation or deactivation of introspection output produced by \gls{WIR} (cf. \cref{sec:wirmacros}).
+This debug infrastructure bases on a small but useful support library which resides in sub-directory \texttt{LIBUSEFUL}.
+
+Due to its importance, \cref{fig:wirarchdirectory} shows the structure of the \texttt{arch} sub-directory in more detail.
+Since the Infineon TriCore \gls{ISA} is the most complete one within \gls{WIR}, this diagram focuses on the \texttt{arch/tricore} directory tree, but the structure for the other \glspl{ISA} available within \gls{WIR} is comparable.
+
+Each \gls{ISA} is implemented via C++ specializations of generic \gls{WIR} classes, comprising, e.g., the inherited classes \texttt{TC13} and \texttt{TC131} in \cref{fig:wirarchdirectory}.
+The \gls{WIR} hardware model requires implementations of the various opcodes and operation formats which reside in files like, e.g., \texttt{tc13opcodes.cc} or \texttt{tc13operationformats.cc}.
+There exist lots more of \gls{ISA}-specific C++ code in order to model, e.g., processor registers or immediate parameters, which are omitted in \cref{fig:wirarchdirectory} for the sake of simplicity.
+System-level configuration files as depicted in \cref{lst:sysConfig} like, e.g., \texttt{tc1796.sys} also reside at this place in the \gls{WIR} directory structure.
+
+\begin{figure}[!t]
+  \begin{center}
+    \begin{forest}
+      pic dir tree,
+      pic root,
+      for tree={% folder icons by default; override using file for file icons
+        directory,
+      },
+      [WIR
+        [\dots]
+        [arch
+          [arm]
+          [generic]
+          [riscv]
+          [tricore
+            [analyses
+              [bit]
+            ]
+            [asmparser]
+            [doc]
+            [optimizations
+              [constfold]
+              [constprop]
+              [deadcode]
+              [gcregallocation]
+              [\dots]
+            ]
+            [tests]
+            [tc13.cc / tc13.h, file]
+            [tc13opcodes.cc, file]
+            [tc13operationformats.cc, file]
+            [tc131.cc / tc131.h, file]
+            [tc131opcodes.cc, file]
+            [tc1796.sys, file]
+            [\dots, file]
+          ]
+        ]
+        [\dots]
+      ]
+    \end{forest}
+  \end{center}
+  \caption{Detailed Directory Structure of ISA-Specific WIR Parts}
+  \label{fig:wirarchdirectory}
+\end{figure}
+
+As already described in \cref{sec:keyfeatures}, all implementations in the directories \texttt{analyses} and \texttt{optimizations} from \cref{fig:wircodedirectory} are generic and processor-independent.
+Thus, the directories with the very same names, but located underneath the \texttt{arch} tree contain all their processor-specific adaptations.
+
+Directory \texttt{asmparser} might contain a \texttt{flex}/\texttt{bison} based assembly code parser that creates \gls{WIR} code from a given stream or string.
+
+Processor-specific unit tests can be found within the \texttt{tests} directories inside the \texttt{arch} tree, while the \texttt{doc} directories therein collect manufacturer documents like, e.g., \gls{ISA} manuals or \gls{ABI} specifications.
+
+\cleardoubleoddpage

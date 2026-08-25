@@ -1,0 +1,610 @@
+%=========================================================================
+\chapter{The WIR System Model}
+\label{chap:sysmodel}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+Within the \gls{WIR} library, systems in general model a complete hardware and software system, represented by class \texttt{WIR\_System}.
+While the previous two chapters focused on the individual \gls{WIR} classes for software components and those ones representing hardware modules, this chapter describes how these software and hardware components are integrated and composed to form complete systems.
+\cref{sec:sysconfig} presents simple, plain-text system configuration files that are used to conveniently construct \gls{WIR} systems.
+The system-level \gls{API} to access and iterate both the software and the hardware models is subject of \cref{sec:swhwmodel}.
+Next, \cref{sec:symbols} introduces the notion of symbols and describes their management by class \texttt{WIR\_System}.
+The relations between the \gls{WIR} software and hardware models are finally described in \cref{sec:memlayout}, with a particular emphasis on a system's memory layout and the allocation of software components to memories.
+
+
+%-------------------------------------------------------------------------
+\section{System Configuration Files}
+\label{sec:sysconfig}
+%-------------------------------------------------------------------------
+
+The sharp-eyed reader will have noticed that the description of the various classes forming the \gls{WIR} hardware model from \cref{chap:hwmodel} looks incomplete at first glance.
+These descriptions mostly present only methods to retrieve and inspect attributes of the various classes, but constructors and methods to set properties of hardware components were omitted.
+This is motivated by the fact that these constructors and set methods are part of the protected or private \gls{API} of their respective classes, while this user's guide solely focuses on the classes' public interfaces.
+It thus remains to be answered how application code can actually instantiate hardware components with specific properties and compose them to form a complete system.
+
+For the sake of convenience, this process is not driven by \gls{API} calls of the \gls{WIR} library.
+Instead, systems and their internal hardware structure based on system components described in \cref{chap:hwmodel} are specified using lightweight plain-text system configuration files.
+An excerpt of such a configuration file was already shown in \cref{lst:sysConfig} on \cpageref{lst:sysConfig}.
+
+A configuration file describes a set of \gls{WIR} system components, i.e., the overall system, its processor cores, memory regions, caches, buses and logical memory sections.
+Each such component is described in one dedicated paragraph within the configuration file.
+Empty lines and comments (starting with a hash (\texttt{`\#'}) character and going until the end of a line) are ignored, cf. \crefrange{lst:sysconfig3}{lst:sysconfig6} of \cref{lst:sysConfig}.
+
+A paragraph always starts with a line specifying the component's unique name, put in brackets.
+The example from \cref{lst:sysConfig} contains three paragraphs for components named \texttt{tc1796} (\cref{lst:sysconfig1}), \texttt{CORE0} (\cref{lst:sysconfig7}) and \texttt{PFLASH-C} (\cref{lst:sysconfig12}).
+After a paragraph's name, the properties of a system component are specified using \textit{<key> = <value>} directives, exactly one per line.
+A mandatory property that must exist in each individual paragraph is the specification of a component's type (cf. \cref{lst:sysconfig2,lst:sysconfig8,lst:sysconfig13}) where this type needs to be one of \texttt{system}, \texttt{core}, \texttt{memory}, \texttt{cache}, \texttt{bus} or \texttt{section}.
+All other properties that can be specified heavily depend on this component type.
+A summary of all existing directives for systems, cores and memory regions is provided in \cref{tab:sysconf1}, while \cref{tab:sysconf2} lists all directives for caches, buses and logical sections.
+
+\newpage
+
+\begin{table}[!ht]
+  \begin{center}
+    \caption{System Configuration Directives for Systems, Cores and Memory Regions}
+    \label{tab:sysconf1}
+    \begin{tabular}{|p{15mm}|p{33mm}|p{11.3cm}|}
+      \hline
+      & \textbf{Key} & \textbf{Value} \\
+      \hhline{|=|=|=|}
+      \textbf{Systems} & \small\texttt{type} & \small\texttt{system} \\
+      \hhline{|=|=|=|}
+      \multirow{4}{*}{\shortstack[l]{\textbf{Cores}}} & \small\texttt{type} & \small\texttt{core} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{isa} & Name of a processor core's \gls{ISA}, string \newline \textit{Each paragraph of type} \texttt{\small core} \textit{must contain an} \texttt{\small isa} \textit{directive.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{clockfreq} & A core's clock frequency in Hertz, unsigned integer \\
+      \hhline{|~|-|-|}
+      & \small\texttt{voltage} & A core's supply voltage in Volts, double \\
+      \hhline{|=|=|=|}
+      \multirow{13}{*}{\shortstack[l]{\textbf{Memory} \\ \textbf{Regions}}} & \small\texttt{type} & \small\texttt{memory} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{origin} & A region's physical start address, unsigned integer \\
+      \hhline{|~|-|-|}
+      & \small\texttt{length} & A region's byte length, unsigned integer\newline \textit{For each processor core, the address ranges of all regions accessible by the core must not overlap.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{dynamic\_allocation} & Whether the used space in a region may vary dynamically at runtime or not, bool (\texttt{`0'} or \texttt{`1'}) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{attributes} & Region attributes given as combination of case-insensitive letters \texttt{`a'} (allocatable by the linker), \texttt{`c'} (cached), \texttt{`i'} (initialized), \texttt{`r'} (readable), \texttt{`w'} (writable), \texttt{`x'} (executable) \newline \textit{Use} \texttt{`!'} \textit{to invert the very next attribute.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{memory\_type} & Name of the physical memory holding a region, string \\
+      \hhline{|~|-|-|}
+      & \small\texttt{clockratio} & Ratio of a memory region's clock frequency compared to the processor's frequency \newline \textit{Use} \texttt{`:'} \textit{to separate both parts of the ratio.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{cycles} & A region's access delay in clock cycles, unsigned integer \newline \textit{The delay denotes to number of cycles that elapses until content of the memory is completely read/written.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{burstcycles} & A region's burst access delay in clock cycles, unsigned integer \newline \textit{Similar to attribute} \texttt{\small cycles} \textit{above, but for burst accesses to a memory.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{buswidth} & Byte width of the memory bus that connects a region, unsigned integer \\
+      \hhline{|~|-|-|}
+      & \small\texttt{hierarchy} & A path through a system's architecture along which some processor core can reach the current memory region, whitespace-separated list of strings \newline \textit{A path contains a list of component names, always starts with the name of a processor core, and continues with a sequence of cache and/or bus names. A path implicitly always ends with the current region so that it must not be specified in the path. \newline
+      Use multiple} \texttt{\small hierarchy} \textit{directives if several cores in a multi-core setup can access one shared memory region.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{sections} & A list of logical section names mapped to a memory region, whitespace-separated list of strings \\
+      \hhline{|~|-|-|}
+      & \small\texttt{load} & A list of logical section names that are loaded from the current region (which thus usually is some kind of \gls{ROM}) to their destination region during a system's boot time, whitespace-separated list of strings \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\newpage
+
+\begin{table}[t]
+  \begin{center}
+    \caption{System Configuration Directives for Caches, Buses and Logical Sections}
+    \label{tab:sysconf2}
+    \begin{tabular}{|p{15mm}|p{33mm}|p{11.3cm}|}
+      \hline
+      & \textbf{Key} & \textbf{Value} \\
+      \hhline{|=|=|=|}
+      \multirow{13}{*}{\shortstack[l]{\textbf{Caches}}}  & \small\texttt{type} & \small\texttt{cache} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{size} & Total byte size of a cache, unsigned integer \newline \textit{Each paragraph of type} \texttt{\small cache} \textit{must contain a} \texttt{\small size} \textit{directive.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{associativity} & Associativity of a cache, unsigned integer \newline \textit{Each paragraph of type} \texttt{\small cache} \textit{must contain an} \texttt{\small associativity} \textit{directive.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{linesize} & Byte size of a cache line, unsigned integer \newline \textit{Each paragraph of type} \texttt{\small cache} \textit{must contain a} \texttt{\small linesize} \textit{directive.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{cache\_type} & Type of a cache, one case-insensitive letter out of \texttt{`d'} (data cache), \texttt{`i'} (instruction cache), \texttt{`u'} (unified cache) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{enabled} & Whether a cache is enabled or not, bool (\texttt{`0'} or \texttt{`1'}) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{shared} & Whether a cache is shared among multiple cores or not, bool (\texttt{`0'} or \texttt{`1'}) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{writethrough} & Whether a cache applies the write-through policy or not, bool (\texttt{`0'} or \texttt{`1'}) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{writeallocate} & Whether a cache applies the write-allocate policy or not, bool (\texttt{`0'} or \texttt{`1'}) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{hitdelay} & Time in clock cycles for a cache hit in the best case, unsigned integer \\
+      \hhline{|~|-|-|}
+      & \small\texttt{missdelay} & Time in clock cycles for a cache miss in the worst case, unsigned integer \\
+      \hhline{|~|-|-|}
+      & \small\texttt{buswidth} & Byte width of the memory bus that connects a cache, unsigned integer \\
+      \hhline{|~|-|-|}
+      & \small\texttt{percent\_size} & A cache's total size as a percentage of a task's size, unsigned integer \\
+      \hhline{|=|=|=|}
+      \multirow{5}{*}{\shortstack[l]{\textbf{Buses}}} & \small\texttt{type} & \small\texttt{bus} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{arbitration} & Arbitration policy of a bus, one case-sensitive string of out \texttt{"fp"} (fixed-priority), \texttt{"rr"} (round-robin), \texttt{"tdma"} (\gls{TDMA}), \texttt{"pd"} (priority-division) \\
+      \hhline{|~|-|-|}
+      & \small\texttt{priorities} & Priority ranking of cores, whitespace-separated list of core names \newline \textit{Cores at the beginning of the list have high priority, cores at the tail have low priority. Any cores that are not listed get priority 0, i.e., they will never get bus access. This attribute is only valid for} \texttt{"fp"} \textit{or} \texttt{"pd"} \textit{arbitration.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{slot} & For \texttt{\small "tdma"} arbitration: \newline
+      Specification of a \gls{TDMA} bus slot, whitespace-separated 2-tuple of string and unsigned int \newline
+      \textit{For a \gls{TDMA} bus slot, the name of the processor core owning the slot and the slot's length in clock cycles need to be provided.} \newline
+      For \texttt{\small "pd"} arbitration: \newline
+      Specification of a priority-division bus slot, whitespace-separated tuple \newline
+      \textit{For a priority-division bus slot, its internal arbitration policy has to be specified first, i.e.,} \texttt{\small "fp"}, \texttt{\small "rr"} \textit{or} \texttt{\small "tdma"}. \textit{If a slot is managed using} \texttt{\small "fp"} \textit{or} \texttt{\small "rr"}, \textit{the slot length in clock cycles has to be specified next. In case of} \texttt{\small "tdma"}, \textit{the owning processor core's name comes next, followed by the slot length. \newline Use multiple} \texttt{\small slot} \textit{directives to specify all bus slots, one after the other.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{arbitrationdelay} & The bus arbiter's arbitration delay in clock cycles, unsigned integer \\
+      \hhline{|=|=|=|}
+      \multirow{3}{*}{\shortstack[l]{\textbf{Logical} \\ \textbf{Sections}}} & \small\texttt{type} & \small\texttt{section} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{alignment} & A section's external alignment, unsigned integer \newline \textit{The external alignment specifies how many least-significant bits of a section's start and end address must be 0.} \\
+      \hhline{|~|-|-|}
+      & \small\texttt{block} & A section's internal alignment, unsigned integer \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+\clearpage
+
+For \texttt{type = system}, only the name of a system has to be specified, no other directives can be given for systems.
+The directives for type \texttt{core} cover the few very basic properties of processor cores shown in \cref{tab:sysconf1}, their meaning is straightforward and requires no additional explanation.
+
+The directives currently supported for type \texttt{memory} correspond with the attributes of class \texttt{WIR\_MemoryRegion} shown in \cref{lst:regattribs}.
+The \texttt{hierarchy} directive is worth mentioning as this is the key to specifying systems with complex memory hierarchies.
+Assuming, e.g., a dual-core architecture with private L1 caches per core connected to a shared bus, and this bus also includes a shared main memory region, then this region would come with two \texttt{hierarchy} directives as shown in \cref{lst:shmemHier}.
+The first one from \cref{lst:shmemHier1} states that the memory region named \texttt{MAINMEM} can be reached by processor core \texttt{CORE0} via some system component named \texttt{L1-C0} being the private cache of \texttt{CORE0}, followed by the shared interconnect named \texttt{BUS}.
+Likewise for \cref{lst:shmemHier2} that refers to \texttt{CORE1} and its private cache \texttt{L1-C1}.
+
+\begin{lstlisting}[style=commandline,float=t!,caption={Example for Shared Memory Hierarchy Configuration},label=lst:shmemHier]
+#
+# Main Memory shared between two cores
+#
+|[MAINMEM]|
+type               = memory
+[...]
+sections           = .text .dataÜ\label{lst:shmemHier0}Ü
+hierarchy          = CORE0 L1-C0 BUSÜ\label{lst:shmemHier1}Ü
+hierarchy          = CORE1 L1-C1 BUSÜ\label{lst:shmemHier2}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=commandline,float=!b,caption={Example for Cached and Uncached Memory Hierarchy Configuration},label=lst:cachememHier]
+#
+# Program RAM with uncached access
+#
+|[I-SRAM-NC]|Ü\label{lst:cachememHier1}Ü
+type               = memoryÜ\label{lst:cachememHier2}Ü
+origin             = 0x20000000Ü\label{lst:cachememHier3}Ü
+attributes         = RWXAÜ\label{lst:cachememHier4}Ü
+[...]
+sections           = .text_uncached .textÜ\label{lst:cachememHier5}Ü
+hierarchy          = CORE0 BUSÜ\label{lst:cachememHier6}Ü
+
+#
+# Program RAM with cached access
+#
+|[I-SRAM-C]|Ü\label{lst:cachememHier7}Ü
+type               = memoryÜ\label{lst:cachememHier8}Ü
+origin             = 0x20800000Ü\label{lst:cachememHier9}Ü
+attributes         = RWXACÜ\label{lst:cachememHier10}Ü
+[...]
+sections           = .text_cachedÜ\label{lst:cachememHier11}Ü
+hierarchy          = CORE0 L1-C0 BUSÜ\label{lst:cachememHier12}Ü
+\end{lstlisting}
+
+\cref{lst:cachememHier} shows another example specifying a system where parts of some \gls{SRAM} memory are cached while other parts of the same memory are not covered by the cache.
+For this purpose, two different memory regions are described in \cref{lst:cachememHier1,lst:cachememHier7}.
+The regions' address spaces are assumed to be disjoint, and the cached region \texttt{I-SRAM-C} explicitly carries the \texttt{`C'} (cached) attribute (cf. \cref{lst:cachememHier10}) while this attribute is missing from \cref{lst:cachememHier4} for region \texttt{I-SRAM-NC}.
+As can be seen from \cref{lst:cachememHier6,lst:cachememHier12}, the \texttt{hierarchy} directives of both regions also differ, such that region \texttt{I-SRAM-C} includes the cache component named \texttt{L1-C0}.
+Finally, both regions also carry different \texttt{sections} directives (cf. \cref{lst:cachememHier5,lst:cachememHier11}).
+For the given example, two logical sections named \texttt{.text\_uncached} and \texttt{.text} are mapped to region \texttt{I-SRAM-NC}, while a dedicated section named \texttt{.text\_cached} is assigned to region \texttt{I-SRAM-C}.
+
+The \texttt{sections} directive of memory regions is important since it connects the \gls{WIR} software model (cf. \cref{chap:swmodel}) with the hardware model from \cref{chap:hwmodel} regarding a system's memory layout.
+Software components like, e.g., functions or basic blocks are assigned to logical sections, and these sections in turn are assigned to physical memory regions.
+This way, it is always well-defined within \gls{WIR} which physical memory is used to store which software component.
+Thus, the corresponding memory properties can be considered for, e.g., address computations or execution time analysis.
+More details on the overall \gls{WIR} memory layout will follow in \cref{sec:memlayout}.
+Coming back to the example from \cref{lst:cachememHier}, \gls{WIR} functions can easily be cached or uncached by assigning them to sections \texttt{.text\_cached} or \texttt{.text\_uncached}, resp.
+
+\begin{lstlisting}[style=code,float=t,caption={Constructors and Methods for Name Handling of Class \texttt{WIR\_System}},label=lst:sysconstruction]
+// Default constructor creating a system from a given system configuration.
+WIR_System::WIR_System@(@ const ästd::stringä æ&æn, const WIR_TaskManager æ&æt @)@;Ü\label{lst:sysconstruction1}Ü
+
+// Copy constructor.
+WIR_System::WIR_System@(@ const WIR_System æ&æs @)@;Ü\label{lst:sysconstruction2}Ü
+
+// Move constructor.
+WIR_System::WIR_System@(@ WIR_System æ&&æs @)@;Ü\label{lst:sysconstruction3}Ü
+
+// Get a system's architecture name.
+ästd::stringä WIR_System::getSystemName@( void )@ const;Ü\label{lst:sysconstruction4}Ü
+\end{lstlisting}
+
+The system configuration files introduced above are finally linked to class \texttt{WIR\_System} via its default constructor shown in \cref{lst:sysconstruction1} of \cref{lst:sysconstruction}.
+This constructor expects a name of a system configuration file as first argument, followed by a reference to a task manager instance (note the future work on task managers already mentioned earlier on \cpageref{futurework:taskmanager}).
+\cref{lst:testprogramsys} of \cref{lst:testprogram} (cf. \cpageref{lst:testprogram}) already showed an example how to use this constructor.
+The string \texttt{n} passed to this constructor is interpreted as follows in order to find the actual configuration file to be used:
+\begin{itemize}
+  \item If \texttt{n} is already a path to a configuration file, i.e., if \texttt{n} contains at least some \texttt{`/'} character somewhere, this string is considered to be a proper -- either absolute or relative -- name where in the file system the desired configuration file resides.
+  In this case, the given string is simply taken and class \texttt{WIR\_System} attempts to open the respective file.
+  \item If \texttt{n} does not contain some \texttt{`/'} character, class \texttt{WIR\_System} checks each \gls{ISA}-specific directory in the full software package underneath directory \texttt{WIR/arch} (cf. \cref{fig:wircodedirectory}), as well as each corresponding sub-directory after \gls{WIR} installation underneath \texttt{\emph{<INSTALLDIR>}/etc} (cf. \cref{fig:wirinstalldirectory}). The first of these directories that contains a configuration file with name \texttt{n} is finally used by \texttt{WIR\_System}.
+  \item If the previous steps do not lead to some valid configuration file, the construction of a \gls{WIR} system fails with a runtime error.
+\end{itemize}
+Next, class \texttt{WIR\_System} processes the specified configuration file paragraph by paragraph and dynamically creates all system components of the appropriate types and with all attributes as specified by the configuration.
+Class \texttt{WIR\_System} also comes with standard copy and move constructors as shown in \cref{lst:sysconstruction2,lst:sysconstruction3}.
+
+The name that is given to a complete system in a configuration file, e.g., \texttt{"tc1796"} from \cref{lst:sysconfig1} of \cref{lst:sysConfig} can be retrieved using method \texttt{getSystemName}, cf. \cref{lst:sysconstruction4} of \cref{lst:sysconstruction}.
+
+
+%-------------------------------------------------------------------------
+\section{Integration of Software and Hardware Models}
+\label{sec:swhwmodel}
+%-------------------------------------------------------------------------
+
+The main purpose of class \texttt{WIR\_System} is to tightly integrate both the \gls{WIR} software and the hardware models at the system level.
+Only such a tight integration allows to reason about the mutual interactions between software and hardware aspects, and to systematically consider these interactions during code analyses and optimizations.
+A first important step towards such a software/hardware integration is to provide convenient access to all software and hardware components by class \texttt{WIR\_System}.
+The top-level classes of the \gls{WIR} software and hardware models are \texttt{WIR\_CompilationUnit} (cf. \cref{fig:swmodel}) and \texttt{WIR\_SystemComponent} (cf. \cref{fig:hwmodel1}).
+This section thus describes the \gls{API} provided by \texttt{WIR\_System} to handle both compilation units and all kinds of system components.
+
+Regarding the integration of the software model, there is not too much to say at this place, except that \texttt{WIR\_System} provides the complete list \gls{API} from \cref{chap:lists} for the management of compilation units.
+
+This, however, is not the case for hardware components, since the full-fledged and generic list \gls{API} usually is not necessary, but additional specific methods become relevant.
+For this purpose, \cref{lst:syshw} shows the \gls{API} dedicated to the systematic access of system components.
+As can be seen from \cref{lst:syshw1,lst:syshw2}, there are two variants of the \texttt{getComponents} method.
+As usual, the first one (\cref{lst:syshw1}) returns a reference to the complete set of all components of any type that make up a system.
+This returned set of type \texttt{WIR\_SystemComponentSet} is basically declared as \texttt{std::set<std::reference\_wrapper<WIR\_SystemComponent>{}>} within \gls{WIR}.
+The second variant (\cref{lst:syshw2}) expects a type name derived from \texttt{WIR\_SystemComponent} as template argument, e.g., \texttt{WIR\_MemoryRegion} or \texttt{RV32IMC}.
+It returns a set of (wrapped) references to only those hardware components of a system that can dynamically be casted to the specified type name.
+
+\begin{lstlisting}[style=code,float=t,caption={System Component Handling of Class \texttt{WIR\_System}},label=lst:syshw]
+// Get the set of all system components.
+const WIR_SystemComponentSet æ&æWIR_System::getComponents@( void )@ const;Ü\label{lst:syshw1}Ü
+
+// Get the set of all system components of a specified type.
+templateæ<ætypename Tæ>æ const ästd::setäæ<æästd::reference_wrapperäæ<æTæ>>æ WIR_System::getComponents@( void )@ const;Ü\label{lst:syshw2}Ü
+
+// Determine whether a system contains a component with the given ID.
+@bool@ WIR_System::containsComponent@(@ WIR_id_t id @)@ const;Ü\label{lst:syshw3}Ü
+
+// Determine whether a system contains a component with the given name.
+@bool@ WIR_System::containsComponent@(@ const ästd::stringä æ&æn @)@ const;Ü\label{lst:syshw4}Ü
+
+// Find the system component with the given ID.
+WIR_SystemComponentSetæ::const_iteratoræ WIR_System::findComponent@(@ WIR_id_t id @)@ const;Ü\label{lst:syshw5}Ü
+
+// Find the system component with the given name.
+WIR_SystemComponentSetæ::const_iteratoræ WIR_System::findComponent@(@ const ästd::stringä æ&æn @)@ const;Ü\label{lst:syshw6}Ü
+
+// Find a memory region that includes a given address.
+WIR_SystemComponentSetæ::const_iteratoræ WIR_System::findMemoryRegion@(@ const WIR_MemoryAddress æ&æa @)@ const;Ü\label{lst:syshw7}Ü
+
+// Find all memory regions that intersect with the given address range.
+WIR_SystemComponentSet WIR_System::findMemoryRegions@(@ const WIR_AddressRange æ&æa @)@ const;Ü\label{lst:syshw8}Ü
+
+// Get all system components, grouped by layers within a system's component hierarchy.
+const ästd::mapäæ<æ@unsigned int@, WIR_SystemComponentSetæ> &æWIR_System::getComponentHierarchyLevels@( void )@ const;Ü\label{lst:syshw9}Ü
+\end{lstlisting}
+
+The \texttt{containsComponent} methods from \cref{lst:syshw3,lst:syshw4} return whether components with a given unique ID or with a given name exist within a system, resp.
+Similarly, the position of such components can be retrieved using the \texttt{findComponent} methods from \cref{lst:syshw5,lst:syshw6}.
+They both return an iterator referring to the found position within the set of all components provided by \texttt{getComponents} (cf. \cref{lst:syshw1}).
+If no component with the given ID or name exists, \texttt{findComponent} returns the \texttt{end()} iterator.
+
+For the convenient lookup specifically of memory regions, class \texttt{WIR\_System} provides the \texttt{findMemoryRegion} method from \cref{lst:syshw7}.
+It expects a memory address as argument and returns an iterator referring to that region that includes this address within the region's address space.
+If no such region is found, the \texttt{end()} iterator is returned again.
+In order to identify all those regions that somehow cover a given address range, method \texttt{findMemoryRegions} (\cref{lst:syshw8}) can be used.
+It returns a set of system components that includes all those regions whose address space has a non-empty intersection with the given address range.
+
+Finally, method \texttt{getComponentHierarchyLevels} (\cref{lst:syshw9}) provides a structured access to all system components according to their position within a system's full memory hierarchy.
+Based on the \texttt{hierarchy} directives already introduced in \cref{sec:sysconfig}, paths from processor cores to memory regions are specified along which components like, e.g., caches or buses can be arranged.
+Using these paths, class \texttt{WIR\_System} determines at which level within the entire memory hierarchy a component actually resides, where level 0 contains all processor cores, level 1 contains components that directly follow a core from level 0, etc.
+\texttt{getComponentHierarchyLevels} now returns a reference to a map that gets an unsigned integer denoting the hierarchy level (i.e., 0 or 1 etc.) as key.
+With such a key, a set of system components is associated by the provided map that all reside at the given level of the memory hierarchy.
+
+
+%-------------------------------------------------------------------------
+\section{Symbols}
+\label{sec:symbols}
+%-------------------------------------------------------------------------
+
+The \gls{WIR} software model is a symbolic representation of code where symbols represent actual memory addresses of pieces of code or data.
+Despite the fact that the \gls{WIR} hardware model is explicitly designed to reason about a system's memory layout and about physical addresses of code or data fragments (cf. \cref{sec:memlayout} for an in-depth discussion of the \gls{WIR} memory layout), it is desirable to keep the software code free of memory addresses as long as possible.
+Using hard-coded memory addresses in \gls{WIR} operations would be difficult to adapt as soon as some new operations were inserted or an optimization eliminates code, which would result in changes of such pre-computed addresses.
+
+A symbol within \gls{WIR} is an abstraction of some real memory address.
+Symbols typically come into play in the context of:
+\begin{itemize}
+  \item function calls where the called function is specified in a symbolic, human-readable way;
+  \item conditional or unconditional jumps where a jump target is given by a basic block's name;
+  \item memory loads or stores where some data object is accessed symbolically.
+\end{itemize}
+This notion of symbols has already been introduced earlier in \cref{ssec:labparams} where label parameters and their properties have been discussed.
+Strictly speaking, there is no conceptual difference at all between labels and symbols within \gls{WIR}.
+Label parameters, however, are derived from the base class \texttt{WIR\_Parameter}, and their sole purpose is to represent symbolic addresses as explicit parameters of machine operations.
+Thus, labels actually enable the proper control and data flow analysis of code within \gls{WIR}.
+Furthermore, label parameters are not unique in that sense that one and the same symbolic address can be represented by several label parameters, e.g., if the same function is called from different \gls{WIR} operations.
+
+The purpose of symbols is different in that sense that they aim to link the \gls{WIR} software model with the hardware model such that memory properties can be taken into account when accessing a symbol, and the visibility of symbols and other linkage properties can be controlled.
+In addition, symbols are unique so that every symbolic address is represented as symbol exactly once within \gls{WIR}.
+For these reasons, \gls{WIR} uses the class \texttt{WIR\_Symbol} to model symbols, while class \texttt{WIR\_LabelParameter} represents label parameters.
+
+\begin{lstlisting}[style=code,float=t,caption={Constructors of Class \texttt{WIR\_Symbol}},label=lst:symconstruction]
+// Default constructor creating a basic block symbol.
+explicit WIR_Symbol::WIR_Symbol@(@ const WIR_BasicBlock æ&æb @)@;Ü\label{lst:symconstruction1}Ü
+
+// Default constructor creating a data object symbol.
+explicit WIR_Symbol::WIR_Symbol@(@ const WIR_Data æ&æd @)@;Ü\label{lst:symconstruction2}Ü
+
+// Default constructor creating a function symbol.
+explicit WIR_Symbol::WIR_Symbol@(@ const WIR_Function æ&æf @)@;Ü\label{lst:symconstruction3}Ü
+
+// Copy constructor.
+WIR_Symbol::WIR_Symbol@(@ const WIR_Symbol æ&æs @)@;Ü\label{lst:symconstruction4}Ü
+
+// Move constructor.
+WIR_Symbol::WIR_Symbol@(@ WIR_Symbol æ&&æs @)@;Ü\label{lst:symconstruction5}Ü
+\end{lstlisting}
+
+Due to their conceptual similarity, it is not surprising that the constructors and all methods for type, reference and name handling of class \texttt{WIR\_Symbol} (cf. \cref{lst:symconstruction,lst:symtype}) are identical with the corresponding \gls{API} of class \texttt{WIR\_LabelParameter} already shown earlier in \cref{ssec:labparams}.
+We thus omit the discussion of these methods here for the sake of brevity.
+
+\begin{lstlisting}[style=code,float=!b,caption={Type, Reference and Name Handling of Class \texttt{WIR\_Symbol}},label=lst:symtype]
+// Get a symbol's type.
+WIR_SymbolType WIR_Symbol::getType@( void )@ const;Ü\label{lst:symtype1}Ü
+
+// Get the basic block to which a symbol refers, if any.
+WIR_BasicBlock æ&æWIR_Symbol::getBasicBlock@( void )@ const;Ü\label{lst:symtype2}Ü
+
+// Get the data object to which a symbol refers, if any.
+WIR_Data æ&æWIR_Symbol::getData@( void )@ const;Ü\label{lst:symtype3}Ü
+
+// Get the function to which a label refers, if any.
+WIR_Function æ&æWIR_Symbol::getFunction@( void )@ const;Ü\label{lst:symtype4}Ü
+
+// Get the symbol's name.
+ästd::stringä WIR_Symbol::getName@( void )@ const;Ü\label{lst:symtype5}Ü
+\end{lstlisting}
+
+A symbol's main properties are of Boolean nature as can be seen from \cref{lst:symprop}.
+The \texttt{set} methods (cf. \cref{lst:symprop1,lst:symprop3,lst:symprop5,lst:symprop7}) thus expect a Boolean flag as only argument that always defaults to \texttt{true}.
+The current state of a symbol's property can be retrieved with the \texttt{is} methods shown in \cref{lst:symprop2,lst:symprop4,lst:symprop6,lst:symprop8}.
+Symbols can be constant and may only be read, which is covered by methods \texttt{setConst} and \texttt{isConst} (\cref{lst:symprop1,lst:symprop2}).
+External symbols are symbols that might be accessed from some \gls{WIR} function, but that are actually declared outside the entire code base modeled using \gls{WIR}.
+Methods \texttt{setExtern} and \texttt{isExtern} (\cref{lst:symprop3,lst:symprop4}) can be used to control this property.
+Next, symbols might be global or local, i.e., they are visible globally for all compilation units of a system's code base, or just locally within that one compilation unit where a symbol actually resides.
+This attribute is managed by methods \texttt{setGlobal} and \texttt{isGlobal} (\cref{lst:symprop5,lst:symprop6}).
+Finally, volatile symbols might exist that can be read or modified asynchronously by something other than the current \gls{WIR} code base.
+Methods \texttt{setVolatile} and \texttt{isVolatile} (\cref{lst:symprop7,lst:symprop8}) can be used to handle such volatile symbols.
+
+\begin{lstlisting}[style=code,float=t,caption={Property Handling of Class \texttt{WIR\_Symbol}},label=lst:symprop]
+// Set whether a symbol is constant/read-only.
+@void@ WIR_Symbol::setConst@( bool@ c æ=æ true @)@;Ü\label{lst:symprop1}Ü
+
+// Determine whether a symbol is constant/read-only.
+@bool@ WIR_Symbol::isConst@( void )@ const;Ü\label{lst:symprop2}Ü
+
+// Set whether a symbol is extern.
+@void@ WIR_Symbol::setExtern@( bool@ e æ=æ true @)@;Ü\label{lst:symprop3}Ü
+
+// Determine whether a symbol is extern.
+@bool@ WIR_Symbol::isExtern@( void )@ const;Ü\label{lst:symprop4}Ü
+
+// Set whether a symbol is global.
+@void@ WIR_Symbol::setGlobal@( bool@ g æ=æ true @)@;Ü\label{lst:symprop5}Ü
+
+// Determine whether a symbol is global.
+@bool@ WIR_Symbol::isGlobal@( void )@ const;Ü\label{lst:symprop6}Ü
+
+// Set whether a symbol is volatile.
+@void@ WIR_Symbol::setVolatile@( bool@ v æ=æ true @)@;Ü\label{lst:symprop7}Ü
+
+// Determine whether a symbol is volatile.
+@bool@ WIR_Symbol::isVolatile@( void )@ const;Ü\label{lst:symprop8}Ü
+\end{lstlisting}
+
+Since symbols are unique as motivated above, their management is another key aspect of the \gls{WIR} system level.
+Symbols refer to basic blocks, data objects or functions.
+Whenever new objects of classes \texttt{WIR\_BasicBlock}, \texttt{WIR\_Data} or \texttt{WIR\_Function} are somewhere somehow added to a system, new symbols are added to class \texttt{WIR\_System} fully automatically.
+This automatic creation of symbols inherently respects the complete hierarchy of the \gls{WIR} software model from \cref{chap:swmodel}.
+This means that if some new function is inserted into a compilation unit that is already part of some system, not only a corresponding function symbol is created, but also symbols for all basic blocks within the newly added function.
+Similar procedures apply when inserting compilation units into systems.
+Likewise, when some basic block, data object or function gets removed from a \gls{WIR} system, its symbol is also automatically removed.
+For these reasons, the public \gls{API} of class \texttt{WIR\_System} does not come with any method to have symbols added or removed explicitly by application code.
+
+Thus, symbol management simply reduces to checking the presence of and finding symbols within a \gls{WIR} system, as can be seen from \cref{lst:symtab}.
+The \gls{API} of class \texttt{WIR\_System} here basically consists of the \texttt{getSymbols} method (cf. \cref{lst:symtab1}), a couple of \texttt{containsSymbol} methods (\crefrange{lst:symtab2}{lst:symtab7}), and several variants of \texttt{findSymbol} methods (\crefrange{lst:symtab8}{lst:symtab13}).
+
+As usual, method \texttt{getSymbols} provides access to all symbols that are currently known to a system.
+The returned set of symbols is basically declared as \texttt{std::set<std::reference\_wrapper<WIR\_Symbol>{}>}.
+
+The \texttt{containsSymbol} methods provide the information whether a certain symbol exists in the context of a \gls{WIR} system or not.
+The variant from \cref{lst:symtab2} allows to check the presence of a symbol via its unique numerical ID.
+In order to directly verify the existence of some actual symbol, the method from \cref{lst:symtab3} can be used that expects a constant reference to the symbol to be checked as argument.
+As motivated earlier, symbols refer to either basic blocks, data objects or functions.
+Thus, it regularly happens that the presence of a symbol for some actual basic block, data object or function needs to be checked.
+For this purpose, class \texttt{WIR\_System} provides the methods from \cref{lst:symtab4,lst:symtab5,lst:symtab6}, resp.
+Finally, the \texttt{containsSymbol} method from \cref{lst:symtab7} can be used to check for a symbol using a string denoting the symbol's name.
+
+In a very similar manner, the \texttt{findSymbol} methods allow to directly obtain a reference to a found symbol, based on its ID (\cref{lst:symtab8}), on a given basic block, data object or function (\cref{lst:symtab9,lst:symtab10,lst:symtab11}), or based on the symbol name (\cref{lst:symtab12}).
+Finally, there is a \texttt{findSymbol} variant (\cref{lst:symtab13}) that can be used to obtain that symbol that occupies a given memory address.
+In other words, the given address must lie in the interval between the found symbol's base address and the symbol's size.
+If an address is not covered by some symbol at all, this \texttt{findSymbol} variant produces a runtime error.
+Similarly, runtime errors are generated by all \texttt{findSymbol} methods if no actual symbol could be found at all.
+Thus, it is good practice to precede each use of \texttt{findSymbol} by a corresponding call of \texttt{containsSymbol}.
+
+\begin{lstlisting}[style=code,float=t,caption={Symbol Handling of Class \texttt{WIR\_System}},label=lst:symtab]
+// Get the set of all symbols of a system.
+const WIR_SymbolSet æ&æWIR_System::getSymbols@( void )@ const;Ü\label{lst:symtab1}Ü
+
+// Determine whether the system contains a symbol with the given ID.
+@bool@ WIR_System::containsSymbol@(@ WIR_id_t id @)@ const;Ü\label{lst:symtab2}Ü
+
+// Determine whether the system contains a given symbol.
+@bool@ WIR_System::containsSymbol@(@ const WIR_Symbol æ&æs @)@ const;Ü\label{lst:symtab3}Ü
+
+// Determine whether the system contains symbol for a given basic block.
+@bool@ WIR_System::containsSymbol@(@ const WIR_BasicBlock æ&æb @)@ const;Ü\label{lst:symtab4}Ü
+
+// Determine whether the system contains symbol for a given data object.
+@bool@ WIR_System::containsSymbol@(@ const WIR_Data æ&æd @)@ const;Ü\label{lst:symtab5}Ü
+
+// Determine whether the system contains symbol for a given function.
+@bool@ WIR_System::containsSymbol@(@ const WIR_Function æ&æf @)@ const;Ü\label{lst:symtab6}Ü
+
+// Determine whether the system contains symbol with a given name.
+@bool@ WIR_System::containsSymbol@(@ const ästd::stringä æ&æn @)@ const;Ü\label{lst:symtab7}Ü
+
+// Find the symbol with the given ID.
+WIR_Symbol æ&æWIR_System::findSymbol@(@ WIR_id_t id @)@ const;Ü\label{lst:symtab8}Ü
+
+// Find the symbol for the given basic block.
+WIR_Symbol æ&æWIR_System::findSymbol@(@ const WIR_BasicBlock æ&æb @)@ const;Ü\label{lst:symtab9}Ü
+
+// Find the symbol for the given data object.
+WIR_Symbol æ&æWIR_System::findSymbol@(@ const WIR_Data æ&æd @)@ const;Ü\label{lst:symtab10}Ü
+
+// Find the symbol for the given function.
+WIR_Symbol æ&æWIR_System::findSymbol@(@ const WIR_Function æ&æf @)@ const;Ü\label{lst:symtab11}Ü
+
+// Find the symbol with the given name.
+WIR_Symbol æ&æWIR_System::findSymbol@(@ const ästd::stringä æ&æn @)@ const;Ü\label{lst:symtab12}Ü
+
+// Find the symbol with the given address.
+WIR_Symbol æ&æWIR_System::findSymbol@(@ const WIR_MemoryAddress æ&æa @)@ const;Ü\label{lst:symtab13}Ü
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Memory Layout and Allocation}
+\label{sec:memlayout}
+%-------------------------------------------------------------------------
+
+This section now puts together all the concepts presented in the previous chapters and discusses the overall \gls{WIR} memory layout.
+For this purpose, \cref{fig:memlayout} illustrates the system-level relationships between the software model from \cref{chap:swmodel} and the hardware model from \cref{chap:hwmodel} with a special focus on symbols as introduced in \cref{sec:symbols}.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{memlayout.png}
+  \end{center}
+  \caption{System-Level WIR Memory Layout}
+  \label{fig:memlayout}
+\end{figure}
+
+The left part of \cref{fig:memlayout} depicts the \gls{WIR} software model according to which a system can contain multiple compilation units, which in turn contain several functions (cf. \cref{sec:functions}) consisting of basic blocks (cf. \cref{sec:basicblocks}) etc.
+Furthermore, compilation units can feature various data objects (\cref{sec:data}).
+
+The right part of the above figure shows those components of the hardware model that are directly involved in a system's memory layout.
+As can be seen, a system features one or multiple processor cores (\cref{ssec:procmodel}).
+As introduced in \cref{sssec:sections}, each processor core features logical executable sections.
+By default, at least the sections \texttt{.text}, \texttt{.data}, \texttt{.bss} and \texttt{.rodata} must exist.
+Additional sections can be created, but this is omitted in \cref{fig:memlayout} for the sake of simplicity.
+Besides processors, a system can include several physical memory regions (cf. \cref{sec:memoryregions}).
+
+As discussed in \cref{sec:sysconfig}, the setup of the \gls{WIR} hardware model and the creation of all the various objects representing processors, memories, caches etc. is driven by system configuration files.
+Here, logical sections are assigned to memory regions using the \texttt{sections} directives (cf. \cref{tab:sysconf1}).
+This kind of assignments (and many others) between \gls{WIR} objects at the software, hardware, and system level is shown in \cref{fig:memlayout} using the dashed orange arrows.
+The effect of the \texttt{sections} directive is represented in the figure by the arrows leading from all the sections to the memory regions.
+
+\cref{sec:symbols} has motivated that each function, basic block and data object is represented by a unique symbol at the system level.
+This unique assignment of the software model's objects to symbols is illustrated by the dashed arrows leading from the software model to the symbols in the left half of \cref{fig:memlayout}.
+
+The connection between the software and the hardware models in \gls{WIR} is now established by the assignment of symbols to logical sections.
+This kind of assignments has not yet been discussed in detail before, but it is visualized in \cref{fig:memlayout} by the links from each symbol to one of the available logical sections.
+These assignments are thus the missing links that close the logical chain from software objects via symbols and sections to physical memories.
+The \gls{API} of class \texttt{WIR\_Symbol} for the assignment of symbols to sections is shown in \cref{lst:symsection}.
+
+\begin{lstlisting}[style=code,float=t,caption={Section Handling of Class \texttt{WIR\_Symbol}},label=lst:symsection]
+// Set the logical section to which a symbol is assigned.
+@void@ WIR_Symbol::setSection@(@ const WIR_Section æ&æs @)@;Ü\label{lst:symsection1}Ü
+
+// Remove any prior explicit assignment of a symbol to a logical section.
+@void@ WIR_Symbol::unsetSection@( void )@;Ü\label{lst:symsection2}Ü
+
+// Get the logical section to which a symbol is assigned.
+const WIR_Section æ&æWIR_Symbol::getSection@( void )@;Ü\label{lst:symsection3}Ü
+
+// Get a symbol's base address.
+WIR_MemoryAddress WIR_Symbol::getBaseAddress@( void )@ const;Ü\label{lst:symsection4}Ü
+\end{lstlisting}
+
+Method \texttt{setSection} (cf. \cref{lst:symsection1}) can be used to explicitly assign a symbol to a given section.
+Such an explicit assignment is performed according to the following rules:
+\begin{enumerate}
+  \item If the symbol to be assigned refers to a function, any explicit section assignments of the function's basic blocks are unset.
+  \item Otherwise, if the symbol to be assigned refers to a basic block, any explicit section assignment of the function to that the basic block belongs is unset.
+  Section assignments of all other basic blocks of that very same function remain unchanged.
+  \item The current symbol itself is finally assigned to the given section.
+\end{enumerate}
+These rules ensure for functions and basic blocks that explicit section assignments only exist either for a function or for a function's basic blocks or for none of them, but never for both.
+If the object represented by a symbol must not be modified (cf. \cref{sec:dontoptimize}), \texttt{setSection} fails with a runtime error.
+
+Previously performed assignments of symbols to sections can be erased using method \texttt{unsetSection} (\cref{lst:symsection2}).
+
+The current assignment of a symbol to a section can be retrieved with the help of method \texttt{getSection} (\cref{lst:symsection3}) that returns a const reference to the assigned \gls{WIR} section.
+\texttt{getSection} follows the rules below in order to determine a symbol's section:
+\begin{enumerate}
+  \item If the symbol has explicitly been assigned to some section before using \texttt{setSection}, this explicitly specified section is returned.
+  \item Otherwise, if the symbol refers to a basic block and that block's owning function has been assigned to a section, the function's section is returned.
+  \item Otherwise, if the symbol refers to a function and the function's basic blocks have been assigned to sections, the section of the very first entry basic block of the function is returned.
+  \item Otherwise, if no explicit section assignment exists, a default section is determined by \texttt{getSection} as follows:
+  \begin{enumerate}
+    \item If the symbol refers to a function or basic block, the default section \texttt{.text} of the first processor core within the \gls{WIR} system is returned.
+    \item Otherwise, the symbol refers to a data object. In this case,
+    \begin{itemize}
+      \item section \texttt{.rodata} of the system's first processor core is returned if the symbol is constant;
+      \item otherwise, section \texttt{.data} of the system's first processor core is returned if the data object is initialized;
+      \item otherwise, section \texttt{.bss} of the system's first processor core is returned.
+    \end{itemize}
+  \end{enumerate}
+\end{enumerate}
+
+Finally, method \texttt{getBaseAddress} (\cref{lst:symsection4}) can be used to conveniently determine a symbol's start address in memory.
+
+The interface shown in \cref{lst:symsection} now enables \gls{WIR} application code to easily perform explicit memory allocation of code or data fragments.
+\cref{lst:cachememHier} on \cpageref{lst:cachememHier} showed an example of a system configuration file supporting both cached and uncached parts of a memory hierarchy.
+This hierarchy can be exploited by some \acrfull{LTO} that explicitly allocates code fragments either to the cached or the uncached memory region.
+Such memory allocation within \gls{WIR} is as easy as a simple call of method \texttt{setSymbol} and passing either the section named \texttt{.text\_cached} or \texttt{.text\_uncached}.
+
+\begin{lstlisting}[style=code,float=t,caption={Data Layout Handling of Classes \texttt{WIR\_System} and \texttt{WIR\_CompilationUnit}},label=lst:datalayout]
+// Get a map grouping together all data objects of a system to their respective sections.
+WIR_DataLayoutMap WIR_System::getDataLayout@( void )@;Ü\label{lst:datalayout1}Ü
+
+// Get a map grouping together all data objects of a compilation unit to their respective sections.
+WIR_DataLayoutMap WIR_Compilation::getDataLayout@( void )@;Ü\label{lst:datalayout2}Ü
+\end{lstlisting}
+
+Methods \texttt{getDataLayout} shown in \cref{lst:datalayout} provide a convenient means to obtain the section assignments specifically for data objects.
+They both return a map that maps a given \gls{WIR} section used as key to the list of references to all data objects currently assigned to the given section.
+In the case of the method from \cref{lst:datalayout1}, this map contains all data objects of the whole \gls{WIR} system, while the variant from \cref{lst:datalayout2} does the same but just per compilation unit.
+This map is basically declared as \texttt{std::map<std::reference\_wrapper<WIR\_Section>, std::list<std::reference\_wrapper<WIR\_Data>{}>{}>}.
+
+Such section assignments are not only useful in the context of \gls{LTO}, but it can also be used for the convenient allocation of entire software tasks to processor cores in multi-core systems.
+In such a multi-core setup, \gls{WIR} assumes that independent \gls{ELF} executable files are generated for all the cores of a system.
+As discussed in \cref{sssec:sections}, these executables all consist of various logical sections owned by their unique processor core, and all these sections are assigned to their respective physical memory regions (cf. \cref{sec:memoryregions}).
+These relations are also depicted in \cref{fig:memlayout} where independent sections \texttt{.text}, \texttt{.data}, \texttt{.bss} and \texttt{.rodata} exist for each processor core within a system.
+By now assigning, e.g., a \gls{WIR} function to the \texttt{.text} section associated with processor core \emph{p}, method \texttt{setSection} from \cref{lst:symsection1} of \cref{lst:symsection} is also key to the allocation of software to cores.
+
+Now that all aspects of memory layout and allocation at the \gls{WIR} system level have been introduced, the only things that remain to be discussed are some details of system configuration files (cf. \cref{sec:sysconfig}) in the context of multi-core systems.
+Here, it is important to note that all the specified sections of a memory region must also be related to the system's cores.
+\cref{lst:shmemHier} on \cpageref{lst:shmemHier} showed a system configuration for a memory region shared between two processor cores named \texttt{CORE0} and \texttt{CORE1}.
+\cref{lst:shmemHier0} specifies that this region gets sections for code and data assigned.
+Since such sections need to exist within \gls{WIR} for each involved processor core, the meaning of \cref{lst:shmemHier} is that region \texttt{MAINMEM} accomodates a total of 4 sections, i.e., \texttt{.text} and \texttt{.data} for both cores \texttt{CORE0} and \texttt{CORE1}.
+
+Generally speaking, logical sections are created by class \texttt{WIR\_System} per region for all items listed in a region's \texttt{section} directive AND for all cores occuring in a region's \texttt{hierarchy} directives.
+Effectively, the cross-product over all sections and cores from a region's \texttt{section} and \texttt{hierarchy} directives is constructed.
+
+\cref{tab:sysconf2} furthermore revealed that basic section attributes can also be specified in system configuration files.
+Now that it became evident that sections are inherently created per region and per involved core, the finally remaining open question is how to specify section attributes, e.g., specifically for the data section associated with \texttt{CORE1} from \cref{lst:shmemHier}.
+For single-core architectures, this is very simple by just providing a paragraph starting with the name \texttt{[.data]} in the configuration file.
+This paragraph is unambiguous, since there is only one processor core in a single-core system and this data section can thus only be assigned to that one core.
+For multi-core systems, however, it has to be specified unambiguously which section of which processor core is meant by a configuration file's paragraph.
+Thus, both section and core name need to be specified, separated by a whitespace, e.g., \texttt{[.data CORE1]} for the above example referring to \cref{lst:shmemHier}.
+
+
+\cleardoubleoddpage

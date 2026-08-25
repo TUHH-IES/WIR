@@ -1,0 +1,1894 @@
+%=========================================================================
+\chapter{Retargeting of Existing Code Optimizations}
+\label{chap:optretarget}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+This chapter describes the steps that are required to retarget the existing \gls{WIR} optimizations to new processor architectures.
+For a general understanding of the various optimizations' purpose, the interested reader should be familiar with \cref{chap:optimization}.
+Since some optimizations are generic and entirely processor-independent (i.e., unused virtual register elimination, empty basic block elimination, redundant basic block elimination, unreachable basic block elimination, loop-invariant code motion and web generation), they are not discussed in the following.
+This chapter thus focuses on the remaining optimizations ranging from graph coloring-based register allocation to local instruction scheduling.
+
+
+%-------------------------------------------------------------------------
+\section{Graph Coloring-Based Register Allocation}
+\label{sec:optregallocretarget}
+%-------------------------------------------------------------------------
+
+The by far most complex optimization that requires the largest retargeting effort is the \gls{WIR} register allocator based on graph coloring.
+According to~\cite{Brig92,Much97,Appel04}, the overall workflow of a graph coloring-based register allocator is:
+\begin{enumerate}
+  \item \emph{Build:}\label{enum:build} Create the \gls{IG}.
+  \item \emph{Simplify:}\label{enum:simplify} Choose some node $v$ from the \gls{IG} with degree less than $K$ that is neither source nor target of a move operation.
+  Remove $v$ and all its incident edges from the \gls{IG}, push $v$ onto a stack $S$.
+  Repeat this until no such non move-related nodes of degree less than $K$ exist in \gls{IG}.
+  \item \emph{Coalesce:}\label{enum:coalesce} Merge nodes in the \gls{IG} that represent source and target registers of move operations.
+  If nodes were merged, go back to \cref{enum:simplify}.
+  \item \emph{Spill:}\label{enum:spill} Select one remaining node $w$ of the \gls{IG} (which must have a degree greater or equal than $K$), mark $w$ as potential spill, remove it and its incident edges from the \gls{IG}, push $w$ onto $S$.
+  \item \emph{Repeat:} If the \gls{IG} still contains nodes, go back to \cref{enum:simplify}.
+  \item \emph{Select:}\label{enum:select} Pop the top node $v$ from $S$, re-insert it and its incident edges into the \gls{IG}.
+  Check among all nodes $w$ adjacent to $v$ whether there is a free color $k_v$ available.
+  If so, color $v$ with $k_v$.
+  Otherwise, mark $v$ as actual spill.
+  Repeat this until $S$ is empty.
+  \item \emph{Spill Code Generation:}\label{enum:spillcode} For each actual spill $v$, insert a spill-load operation before each use of $v$ and a spill-store operation after each definition of $v$.
+  \item \emph{Moves:}\label{enum:moves} Remove all register-register move operations with identical source and target registers.
+  \item \emph{Start Over:}\label{enum:startover} If actual spills have been determined during \cref{enum:select}, go to \cref{enum:build}.
+  \item \emph{Uncolored Spills:}\label{enum:uncolspills} Color all actual spills still remaining in the \gls{IG}.
+  \item \emph{Caller-Saving:}\label{enum:callsave} Add spill-stores and -loads for caller-saved registers alive across calls.
+  \item \emph{Redundant Spills:}\label{enum:redspills} Remove all redundant spills.
+\end{enumerate}
+
+The generic and processor-independent implementation of the \gls{IG} is provided by class \texttt{WIR\_InterferenceGraph} (see file \texttt{WIR/optimizations/gcregallocation/wirinterferencegraph.cc}).
+Most of the above algorithm is also realized in a generic way within class \texttt{WIR\_GraphColoring} (cf. file \texttt{WIR/optimizations/gcregalloca\-tion/wirgraphcoloring.cc}).
+However, several steps above require adaptations during retargeting for a new processor architecture.
+This regularly means to provide overloaded virtual methods by inheriting from the abstract base class \texttt{WIR\_GraphColoring}.
+The upcoming subsections describe what needs to be done to retarget the individual steps of the above algorithm.
+But before coming to this, the following steps describe how to set up the infrastructure for inheriting from the register allocator's abstract base class:
+\begin{enumerate}
+  \item Create new directories \texttt{WIR/arch/{\itshape archDir}/optimizations} and \texttt{WIR/arch/{\itshape archDir}/optimizations/ gcregallocation}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Graph Coloring-Based Register Allocator},label=lst:newprocgcraheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_GRAPHCOLORING_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_GRAPHCOLORING_H^
+
+// Include WIR headers
+^#include^ §<wir/wirtypes.h>§
+^#include^ §<optimizations/gcregallocation/wirgraphcoloring.h>§
+
+namespace WIR {
+
+class WIR_CompilationUnit;
+class WIR_Function;
+class WIR_System;
+
+class Ü{\itshape newModel}Ü_GraphColoring : public WIR_GraphColoringÜ\label{lst:newprocgcraheader1}Ü
+{
+  public:
+
+    // Default constructor for system-level optimization.
+    explicit Ü{\itshape newModel}Ü_GraphColoring@(@ WIR_System æ&æ, @bool@ = false @)@;Ü\label{lst:newprocgcraheader2}Ü
+
+    // Default constructor for compilation unit-level optimization.
+    explicit Ü{\itshape newModel}Ü_GraphColoring@(@ WIR_CompilationUnit æ&æ, @bool@ = false @)@;Ü\label{lst:newprocgcraheader3}Ü
+
+    // Default constructor for function-level optimization.
+    explicit Ü{\itshape newModel}Ü_GraphColoring@(@ WIR_Function æ&æ, @bool@ = false @)@;Ü\label{lst:newprocgcraheader4}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_GraphColoring@( void )@;Ü\label{lst:newprocgcraheader5}Ü
+
+  protected:
+
+  private:
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/Makefile.src| \\
+  to the beginning of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Graph Coloring-Based Register Allocator},label=lst:newprocgcraimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+^#include^ §<libuseful/io.h>§
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+// Include local headers
+^#include^ §"Ü{\itshape\color{orange}newModel}Ügraphcoloring.h"§
+
+namespace WIR {
+
+// Default constructor for system-level optimization.
+Ü{\itshape newModel}Ü_GraphColoring::Ü{\itshape newModel}Ü_GraphColoring@(@ WIR_System æ&æs, @bool@ verbosity @) :@Ü\label{lst:newprocgcraimpl1}Ü
+  WIR_Optimization { s },
+  WIR_GraphColoring { s, verbosity }
+{};
+
+// Default constructor for compilation unit-level optimization.
+Ü{\itshape newModel}Ü_GraphColoring::Ü{\itshape newModel}Ü_GraphColoring@(@ WIR_CompilationUnit æ&æc, @bool@ verbosity @) :@Ü\label{lst:newprocgcraimpl2}Ü
+  WIR_Optimization { c },
+  WIR_GraphColoring { c, verbosity }
+{};
+
+// Default constructor for function-level optimization.
+Ü{\itshape newModel}Ü_GraphColoring::Ü{\itshape newModel}Ü_GraphColoring@(@ WIR_Function æ&æf, @bool@ verbosity @) :@Ü\label{lst:newprocgcraimpl3}Ü
+  WIR_Optimization { f },
+  WIR_GraphColoring { f, verbosity }
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_GraphColoring::~Ü{\itshape newModel}Ü_GraphColoring@( void )@Ü\label{lst:newprocgcraimpl4}Ü
+{};
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item If not yet existing, create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+include arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Makefile.src
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Ü{\itshape newModel}Ügraphcoloring.cc arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Ü{\itshape newModel}Ügraphcoloring.h
+\end{lstlisting}
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/{\itshape newModel}graphcoloring.h} according to the general structure depicted in \cref{lst:newprocgcraheader}.
+
+  \item Create file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/{\itshape newModel}graphcoloring.cc} according to the general structure depicted in \cref{lst:newprocgcraimpl}.
+\end{enumerate}
+
+The constructors from \cref{lst:newprocgcraimpl1,lst:newprocgcraimpl2,lst:newprocgcraimpl3} of \cref{lst:newprocgcraimpl} take a reference to a \gls{WIR} system, compilation unit or function as first argument, resp.
+Within these objects, all virtual registers will be replaced by physical registers.
+The optional Boolean argument of all constructors controls whether progress messages are printed during register allocation.
+These arguments are delegated to the constructors of base classes \texttt{WIR\_Optimization} and \texttt{WIR\_GraphColoring}.
+In their initial state, the constructors and the destructor have no additional tasks, since the newly created class does not yet feature its very own attributes to be constructed or destroyed.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Initialization}
+\label{ssec:gcinit}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Before realizing the graph coloring algorithm's steps from \cpageref{enum:build}, a processor-specific initialization is needed that introduces a new processor architecture's physical registers to the allocator.
+This initialization is done by the protected, purely virtual method \texttt{createPhregs} that needs to be overloaded by the newly created register allocation class.
+For this purpose, extend file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/{\itshape newModel}\-graphcoloring.h} by the following protected method declaration: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @void@ createPhregs@(@ WIR_Function æ&æf @)@ override;
+\end{lstlisting}
+\\
+Provide an initially empty implementation of this method in file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcreg\-allo\-cation/{\itshape newModel}graphcoloring.cc}.
+For the sake of simplicity, we will refer to the existing implementation of method \texttt{TC\_GraphColoring::createPhregs} from file \texttt{WIR/arch/tricore/optimizations/gcreg\-allo\-cation/tcgraphcoloring.cc} for the TriCore processor models.
+
+The first task to be done in \texttt{createPhregs} is to retrieve the underlying \gls{WIR} processor model and to ensure that it corresponds to \texttt{\emph newModel}.
+This is performed by obtaining the \gls{WIR} system from the function provided as argument to \texttt{createPhregs}.
+The system can then be queried for its sections and associated processor models, and the obtained base processor can afterwards be dynamically casted to the desired class.
+For the running TriCore example, these steps look as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+// Determine the involved processor core.
+const WIR_System æ&æsys = f.getCompilationUnit@()@.getSystem@()@;
+const WIR_Section æ&æsec = sys.findSymbol@(@ f @)@.getSection@()@;
+const WIR_BaseProcessor æ&æp = sec.getProcessor@()@;
+
+// Ensure the correct processor model.
+ufAssert@(@ p.getISAName@()@.find@(@ "TC1.3" @)@ == §0§ @)@;
+const auto æ&æproc = dynamic_castæ<æconst TC13 æ&>æ@(@ p @)@;
+\end{lstlisting}
+\\
+The register allocator uses a list \texttt{mPhregs} that contains all physical registers of a processor model that can be used by the allocator.
+This list is declared in file \texttt{WIR/optimizations/gcregallocation/wirgraphcoloring.h} as \texttt{std::list<std::reference\_wrapper<const WIR\_PhysicalRegister>{}>}.
+This list must be initialized by method \texttt{createPhregs} with the appropriate physical registers, below again shown for the TriCore example: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+// TriCore registers subject to register allocation.
+mPhregs = {
+  // TriCore data registers.
+  const_castæ<æTC_DRegP æ&>æ@(@ proc.D0@() )@, const_castæ<æTC_DRegP æ&>æ@(@ proc.D1@() )@, Ü\color{gray}{\itshape [...]}Ü,
+  const_castæ<æTC_DRegP æ&>æ@(@ proc.D15@() )@,
+
+  // TriCore address registers.
+  const_castæ<æTC_ARegP æ&>æ@(@ proc.A2@() )@, Ü\color{gray}{\itshape [...]}Ü, const_castæ<æTC_ARegP æ&>æ@(@ proc.A7@() )@,
+  const_castæ<æTC_ARegP æ&>æ@(@ proc.A12@() )@, Ü\color{gray}{\itshape [...]}Ü, const_castæ<æTC_ARegP æ&>æ@(@ proc.A15@() )@ };
+\end{lstlisting}
+\\
+As can be seen, not necessarily all physical registers of a processor model get listed in \texttt{mPhregs}.
+The above example purposively omits the TriCore address registers \texttt{A0}, \texttt{A1} and \texttt{A8} -- \texttt{A11}.
+This is due to the \gls{ABI} that specifies special roles of certain registers which must be respected during register allocation.
+For example, \texttt{A8} and \texttt{A9} are reserved for operating system use, and \texttt{A10} serves as stack pointer.
+
+However, \gls{WIR} code regularly makes use of such special registers by introducing virtual registers that are precolored with the desired special-purpose physical register.
+In this case, the register allocator of course has to replace each occurrence of such a pre-colored virtual register by its associated physical register.
+In order to support this task, the base class \texttt{WIR\_GraphColoring} declares a \texttt{WIR\_PhysicalRegisterSet} named \texttt{mPhregsForPrecoloringOnly}.
+This set thus also needs to be initialized by method \texttt{createPhRegs}, e.g.: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+// TriCore registers subject to pre-coloring but NOT to register allocation.
+mPhregsForPrecoloringOnly = {
+  const_castæ<æTC_ARegP æ&>æ@(@ proc.A0@() )@, const_castæ<æTC_ARegP æ&>æ@(@ proc.A1@() )@,
+  const_castæ<æTC_ARegP æ&>æ@(@ proc.A8@() )@, const_castæ<æTC_ARegP æ&>æ@(@ proc.A9@() )@,
+  const_castæ<æTC_ARegP æ&>æ@(@ proc.A10@() )@, const_castæ<æTC_ARegP æ&>æ@(@ proc.A11@() )@ };
+\end{lstlisting}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Interference Graph Creation}
+\label{ssec:igcreation}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Most of the creation of the \gls{IG} is done in a processor-independent way by exploiting the generic \gls{WIR} liveness analysis and inserting edges whenever two registers are simultaneously alive.
+However, it might be required to add processor-specific interferences to the \gls{IG} which is the purpose of the purely virtual method \texttt{buildProcessor\-SpecificInterferences}.
+
+A typical scenario occurring for many processors is that the architecture features different types of physical registers which are incompatible with each other.
+Prime examples are general-purpose integer registers and dedicated floating-point registers, or the TriCore's data and address registers.
+Here, the register allocator must ensure that no virtual data register is ever allocated to some address register, and vice versa.
+This is ensured by adding extra \gls{IG} edges between any node representing a virtual register of the one type and all nodes representing the physical registers of the other type.
+
+Thus, file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/{\itshape newModel}\-graphcoloring.h} has to be extended by the following protected method declaration: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @void@ buildProcessorSpecificInterferences@(@ WIR_Function æ&æf,
+                                                  WIR_InterferenceGraph æ&æigraph @)@ override;
+\end{lstlisting}
+\\
+Next, provide an initially empty realization of this method in file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcreg\-allocation/{\itshape newModel}\-graphcoloring.cc}.
+It receives references to the current \gls{WIR} function where register allocation shall take place, and to the interference graph as arguments.
+For the aforementioned purpose, \texttt{buildProcessorSpecificInterferences} iterates over the function's virtual registers that are represented by an \gls{IG} node and that are not precolored.
+Hereafter, it iterates over all physical registers listed in \texttt{mPhregs}, determines the types of the current virtual and physical register and adds an interference to the \gls{IG} if necessary: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+for @(@ const WIR_VirtualRegister æ&ær : f.getVirtualRegisters@() )@Ü\label{lst:buildPSI1}Ü
+  if @(@ !isChild@()@ && igraph.containsNode@(@ r @)@ && !isPrecolored@(@ r @) )@Ü\label{lst:buildPSI2}Ü
+    for @(@ const WIR_VirtualRegister æ&æl : r.getLeafs@() )@Ü\label{lst:buildPSI3}Ü
+      for @(@ const WIR_PhysicalRegister æ&æpreg : mPhregs @)@Ü\label{lst:buildPSI4}Ü
+        if @(@ !igraph.interfere@(@ l, preg @)@ && !igraph.areSameNodes@(@ l, preg @)@ &&Ü\label{lst:buildPSI5}Ü
+             @( ( (@ l.getType@()@ == TC13::RegisterType::dReg @)@ &&Ü\label{lst:buildPSI6}Ü
+                 @(@ preg.getType@()@ == TC13::RegisterType::aReg @) )@ ||
+               @( (@ l.getType@()@ == TC13::RegisterType::aReg @)@ &&Ü\label{lst:buildPSI7}Ü
+                 @(@ preg.getType@()@ == TC13::RegisterType::dReg @) ) ) )@
+          igraph.addInterference@(@ l, preg, §1§ @)@;Ü\label{lst:buildPSI8}Ü
+\end{lstlisting}
+\\
+A very simple \gls{IG} showing the effect of the above code for virtual TriCore data registers is depicted in \cref{fig:igraph1}.
+It shows the virtual data register \texttt{d\_6115} which, due to a given precoloring, is constrained to physical register \texttt{D2}.
+Due to this constraint, it is not necessary to add interference edges between \texttt{d\_6115} and all the address registers shown at the bottom of \cref{fig:igraph1}.
+This motivates why \cref{lst:buildPSI2} above checks only for virtual registers without precoloring.
+For virtual register \texttt{d\_6105}, however, the edges towards address registers \texttt{A2} -- \texttt{A15} are generated in \cref{lst:buildPSI8}.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{igraph1.png}
+  \end{center}
+  \caption{Example of Processor-Specific Interferences for Virtual TriCore Data Registers}
+  \label{fig:igraph1}
+\end{figure}
+
+Method \texttt{addInterference} used in \cref{lst:buildPSI8} expects the two \gls{IG} nodes that interfere with each other as first arguments, followed by the number of edges to be added.
+Usually, only one edge needs to be added to the \gls{IG} as shown in \cref{lst:buildPSI8}.
+In general, however, the \gls{IG} can be a multi-graph with several edges between a pair of nodes.
+This situation can happen for hierarchical registers, which are fully supported by the \gls{IG} itself as well as by the generic register allocator from class \texttt{WIR\_GraphColoring}.
+
+To be more specific, \gls{IG} nodes can represent either non-hierarchical virtual registers such as \texttt{d\_6105} or \texttt{d\_6115} from \cref{fig:igraph1}.
+These are stand-alone virtual data registers that can freely be allocated to any of the available physical data registers.
+Alternatively, an \gls{IG} node can represent the root of some hierarchical virtual register, such as an extended register of the TriCore architecture that spans over two neighboring data registers.
+For a hierarchical register, both the \gls{IG} and the register allocator ensure that the childs of the hierarchical register are no longer freely allocated, but only in such a way that the entire hierarchy of virtual registers is correctly assigned to an appropriate hierarchy of physical registers.
+
+\cref{fig:igraph2} shows an example \gls{IG} with two virtual hierarchical registers \texttt{e\_6128} and \texttt{e\_6115}.
+These TriCore extended registers form the roots of register hierarchies which contain virtual data registers \texttt{d\_6130} and \texttt{d\_6132} as childs (\texttt{d\_6117} and \texttt{d\_6119}, resp.).
+But these child registers are not represented by individual \gls{IG} nodes, they are only visualized in \cref{fig:igraph2} in order to make clear that the child registers are integral part of their respective root nodes representing \texttt{e\_6128} and \texttt{e\_6115}.
+
+This explains the test \texttt{!isChild()} from \cref{lst:buildPSI2} on \cpageref{lst:buildPSI2} -- any kind of virtual register being a child node is skipped in the above code so that only non-hierarchical virtual registers or roots of virtual hierarchical registers are considered.
+The loop from \cref{lst:buildPSI3} then iterates over all leafs, e.g., registers \texttt{d\_6117} and \texttt{d\_6119} for hierarchical register \texttt{e\_6115} from \cref{fig:igraph2}.
+And between any such virtual leaf register and the TriCore's address registers, interferences are finally added, which results in edges between node \texttt{e\_6115} and all address registers depicted in \cref{fig:igraph2}.
+
+Furthermore, the example from \cref{fig:igraph2} shows that both hierarchical registers \texttt{e\_6128} and \texttt{e\_6115} interfere due to some liveness conflicts.
+Since these two graph nodes represent hierarchical registers with 2 leafs each, two interference edges between them are shown in \cref{fig:igraph2}, illustrating the fact that the \gls{IG} can potentially be a multi-graph.
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{igraph2.png}
+  \end{center}
+  \caption{Example of Processor-Specific Interferences for Virtual TriCore Extended Data Registers}
+  \label{fig:igraph2}
+\end{figure}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Coalescing}
+\label{ssec:coalescing}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Coalescing is an optimization that is part of the register allocator and that aims to eliminate as many redundant move operations as possible.
+Move operations copy the contents of a source register to another target register.
+If the register allocator assigns both these move-related source and target registers to the same physical register, the move actually performs no action and can thus be removed.
+In order to systematically exploit this, the \gls{WIR} register allocator checks for move operations in the code and ensures that no interference edges between the source and target registers of a move are added to the \gls{IG}.
+Then, coalescing merges the \gls{IG} nodes representing a move's source and target into one single node.
+And since this coalesced node will get exactly one color, both move-related registers are assigned the same physical register and the move gets eliminated.
+
+The register allocator uses the purely virtual methods \texttt{getUseOfMove} and \texttt{getDefOfMove} to identify the source and target registers of a given move operation.
+In order to provide these methods for a new processor architecture, file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/{\itshape newModel}\-graphcoloring.h} has to be extended as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual WIR_BaseRegister æ&ægetUseOfMove@(@ const WIR_Operation æ&æo @)@ const override;
+
+virtual WIR_BaseRegister æ&ægetDefOfMove@(@ const WIR_Operation æ&æo @)@ const override;
+\end{lstlisting}
+\\
+These methods get a reference to a \gls{WIR} operation as argument that has safely been identified as register-register move.
+They return a reference to the move's source register (\texttt{getUseOfMove}) or to its target register (\texttt{getDefOfMove}), resp.
+
+For most architectures that feature a dedicated move operation in their \gls{ISA}, these methods regularly boil down to returning the register associated with the operation's first or second parameter, as shown in the following code example taken from the TriCore register allocator: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+WIR_BaseRegister æ&æTC_GraphColoring::getUseOfMove@(@ const WIR_Operation æ&æo @)@ const
+{
+  return@(@ dynamic_castæ<æWIR_RegisterParameter æ&>æ@(@ o.getExplicitParameter@(@ §2§ @) )@.getRegister@() )@;
+};
+
+WIR_BaseRegister æ&æTC_GraphColoring::getDefOfMove@(@ const WIR_Operation æ&æo @)@ const
+{
+  return@(@ dynamic_castæ<æWIR_RegisterParameter æ&>æ@(@ o.getExplicitParameter@(@ §1§ @) )@.getRegister@() )@;
+};
+\end{lstlisting}
+\\
+For other architectures where arithmetical operations need to be used in special ways in order to achieve a register-register move (e.g., RISC-V where a move is only a pseudo-operation), more complex approaches can easily be realized inside \texttt{getUseOfMove} and \texttt{getDefOfMove}.
+
+Besides this identification of a move's source and target registers, coalescing can be controlled in a fine-grained and processor-specific way via method \texttt{avoidCoalescing}.
+As the name suggests, this method can be used to avoid coalescing of two move-related registers in situations that depend on properties of the underlying processor architecture.
+If coalescing needs to be avoided, extend file \texttt{WIR/arch/{\itshape archDir}/optimizations/gc\-reg\-allo\-cation/{\itshape newModel}\-graphcoloring.h} by: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ avoidCoalescing@(@ const WIR_Operation æ&æo, const WIR_BaseRegister æ&ær1,
+                              const WIR_BaseRegister æ&ær2,
+                              const WIR_InterferenceGraph æ&æigraph @)@ const override;
+\end{lstlisting}
+\\
+This method gets references to a move operation and its two move-related registers as arguments, as well as a reference to the current \gls{IG}.
+Based on these inputs, \texttt{avoidCoalescing} returns \texttt{true} if the given move operation shall not be coalesced, or \texttt{false} otherwise.
+
+A typical scenario where coalescing needs to be avoided are move operations that store the results of a function call.
+A processor architecture's \gls{ABI} mandates which physical registers have to be used to pass results from a called function (callee) to the calling function (caller).
+Regularly, these registers are caller-saved, and special attention has to be paid to such caller-saved registers that are alive across function calls (cf. \cref{sssec:vregscalls}).
+Move operations immediately following a function call can then move the function's result from its dedicated caller-saved registers into callee-saved registers.
+In such a situation, it might be reasonable for a given processor architecture to keep these particular move operations.
+
+For the running TriCore example, method \texttt{avoidCoalescing} thus checks whether
+\begin{itemize}
+  \item the move's source register corresponds to phyiscal registers \texttt{D2}, \texttt{D3} or \texttt{E2} (the return value registers according to the TriCore \gls{ABI}), and
+  \item the move operation resides at the very beginning of its basic block, and
+  \item all basic blocks preceding the move in the \gls{CFG} end with a function call operation, and
+  \item all these preceding call operations define that register that is the move's source register.
+\end{itemize}
+In such a situation, \texttt{avoidCoalescing} returns \texttt{true} so that the move is kept.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Spill Cost Computation}
+\label{ssec:spillcosts}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+The spilling \cref{enum:spill} from \cpageref{enum:spill} selects one \gls{IG} node of significant degree and marks it as potential spill.
+This means that the virtual register associated with the chosen node might not be kept in a physical register.
+Instead, it might have to be spilled out into a reserved place of the processor's main memory (usually a location in the current function's stack frame).
+A spilled virtual register thus cannot be directly accessed by machine operations, but dedicated load and store operations (so-called spill code) must load the register's contents from the stack into a register first, and new values of the register need to be written back using spill-stores.
+
+The decision which virtual register becomes a potential spill is critical for several reasons.
+First, it has a significant impact on the total amount of spill code to be generated and on the resulting code size.
+Furthermore, the final code's performance can be heavily affected, as the frequent execution of large amounts of spill code is extremely inefficient.
+
+Spilling within the \gls{WIR} graph coloring allocator assigns a metric to all \gls{IG} nodes that takes the positions where a register is used, defined or moved into account.
+In principle, each use of a virtual register results in costs for a preceding spill-load, each definition adds costs for a subsequent spill-store, and spilling a move-related virtual register adds negative costs since the move can be eliminated again.
+Among all \gls{IG} nodes of significant degree, the register allocator chooses that one leading to the least overall spill costs.
+
+This general approach of spill cost computation is realized by the virtual method \texttt{WIR\_GraphColoring::com\-puteSpillCosts} which usually does not require a specific retargeting.
+By overloading it in derived register allocation classes, different cost computations can be implemented though.
+
+What needs to be adapted for a new processor architecture are those methods that determine the actual costs of a spill-load, spill-store or a move eliminated due to a spill.
+This is realized by extending the header file of the new architecture's register allocator as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @unsigned int@ getSpillLoadCosts@(@ const WIR_VirtualRegisterParameter æ&æp æ)æ const override;
+
+virtual @unsigned int@ getSpillStoreCosts@(@ const WIR_VirtualRegisterParameter æ&æp æ)æ const override;
+
+virtual @unsigned int@ getMoveCosts@(@ const WIR_Operation æ&æo æ)æ const override;
+\end{lstlisting}
+\\
+For some operation's register parameter \texttt{p} whose associated register might become a potential spill, \texttt{getSpill\-LoadCosts} and \texttt{getSpillStoreCosts} return the processor-specific spill load and store costs, resp.
+If a move operation \texttt{o} gets eliminated due to spilling, its saved costs are returned by \texttt{getMoveCosts}.
+
+What these costs shall represent for a new processor architecture is left to the developer.
+If execution time shall be modeled, the latencies of the involved physical memory regions are important.
+A spill accesses the stack so that the latency of the stack's memory region is relevant.
+Furthermore, an additional latency has to be considered, since each spill operation needs to be fetched from the memory region holding the binary executable code.
+
+Using the \gls{WIR} memory layout (cf. \cref{sec:memlayout}), memory access latencies can be exploited for spill cost estimation.
+For this purpose, the new allocator's header file can be extended by the following two private attributes: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+private:
+
+  // mStackAccessLatency stores the latency of the memory region holding the stack.
+  unsigned int mStackAccessLatency;
+
+  // mBBAccessLatency stores the latency of the memory region where a basic block with a given ID resides.
+  ästd::mapäæ<æWIR_id_t, @unsigned int@æ>æ mBBAccessLatency;
+\end{lstlisting}
+\\
+Attribute \texttt{mStackAccessLatency} should be initialized with the dummy value 0 by the constructors from \cref{lst:newprocgcraimpl}.
+Meaningful values can be given to both attributes inside method \texttt{createPhregs} (cf. \cref{ssec:gcinit}).
+For the running TriCore example, \texttt{createPhregs} pre-computes the access latencies as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+// Determine memory access latency of the stack.
+ufAssert@(@ proc.containsSection@(@ ".stack" @) )@;Ü\label{lst:gcmemlatency1}Ü
+const WIR_MemoryRegion æ&æstackMem = proc.findSection@(@ ".stack" @)@->get@()@.getRegion@()@;Ü\label{lst:gcmemlatency2}Ü
+mStackAccessLatency = stackMem.getMaxDelay@()@;Ü\label{lst:gcmemlatency3}Ü
+
+// Determine the code access latencies of all basic blocks.
+mBBAccessLatency.clear@()@;Ü\label{lst:gcmemlatency4}Ü
+for @(@ const WIR_BasicBlock æ&æb : f @)@ {
+  const auto æ&æregion = sys.findSymbol@(@ b @)@.getSection@()@.getRegion@()@;Ü\label{lst:gcmemlatency5}Ü
+  mBBAccessLatencyæ[æ b.getID@()@ æ]æ = region.getMaxDelay@()@;Ü\label{lst:gcmemlatency6}Ü
+}
+\end{lstlisting}
+\\
+\cref{lst:gcmemlatency1} ensures that a section \texttt{.stack} actually exists, which always holds for the TriCore systems modeled within \gls{WIR}.
+Next, this section and the memory region to which it is allocated are retrieved.
+The stack region's memory latency is obtained using \texttt{getMaxDelay}, which is assigned to the attribute \texttt{mStackAccessLatency} in \cref{lst:gcmemlatency3}.
+
+For the access latencies of all basic blocks, map \texttt{mBBAccessLatency} is cleared first.
+After that, each basic block of the current function is iterated, its logical section and then its memory region are determined (\cref{lst:gcmemlatency5}).
+Finally, the region's latency is stored in the map under the current basic block's ID (\cref{lst:gcmemlatency6}).
+
+These pre-computed access latencies can finally be used for spill cost computation: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+@unsigned int@ TC_GraphColoring::getSpillLoadCosts@(@ const WIR_RegisterParameter æ&æp @)@ const
+{
+  auto æ&æb = p.getOperation@()@.getInstruction@()@.getBasicBlock@()@;
+  @unsigned int@ cost = mStackAccessLatency + mBBAccessLatency.at@(@ b.getID@() )@;Ü\label{lst:gcspillcost1}Ü
+
+  auto æ&ær = dynamic_castæ<æWIR_VirtualRegister æ&>æ@(@ p.getRegister@() )@;
+
+  if @( (@ r.getType@()@ == TC13::RegisterType::eReg @)@ || @(@ r.getType@()@ == TC13::RegisterType::pReg @) )@
+    return@(@ cost + mStackAccessLatency @)@;Ü\label{lst:gcspillcost2}Ü
+
+  return@(@ cost @)@;
+};
+
+@unsigned int@ TC_GraphColoring::getSpillStoreCosts@(@ const WIR_RegisterParameter æ&æp @)@ const
+{
+  return@(@ getSpillLoadCosts@(@ p @) )@;
+};
+\end{lstlisting}
+\\
+\cref{lst:gcspillcost1} computes a load's basic spill costs consisting of the stack's access latency plus the latency of that memory region to which the basic block containing register parameter \texttt{p} to be spilled is allocated.
+As loading a TriCore extended register from the stack performs a total of two memory accesses, the stack latency is added another time to the returned cost in this case in \cref{lst:gcspillcost2}.
+Method \texttt{getSpillStoreCosts} simply calls \texttt{getSpillLoadCosts}, because the costs for loads and stored do not differ for the given example. \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+@unsigned int@ TC_GraphColoring::getMoveCosts@(@ const WIR_Operation æ&æo @)@ const
+{
+  ufAssert@( (@ o.getOpCode@()@ == TC13::OpCode::MOV_RR @)@ || @(@ o.getOpCode@()@ == TC13::OpCode::MOV_AA @) )@;
+  return@(@ mBBAccessLatency.at@(@ o.getInstruction@()@.getBasicBlock@()@.getID@() ) )@;
+};
+\end{lstlisting}
+\\
+Finally, \texttt{getMoveCosts} ensures that the given \gls{WIR} operation is a move, and the returned costs again boil down to the access latency of the memory containing the move.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Color Selection}
+\label{ssec:colorselect}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+The selection of actual colors for an \gls{IG} node is done by the purely virtual method \texttt{selectColors}.
+Thus, a retargeted allocator's header file has to be extended by the following declaration: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual WIR_GraphColoring::WIR_ColorMap selectColors@(@ const ästd::vectoräæ<æästd::reference_wrapperäæ<æ
+                                                        WIR_VirtualRegisteræ>> &æleafs,
+                                                      WIR_InterferenceGraph æ&æigraph @)@ override;
+\end{lstlisting}
+\\
+According to \cref{ssec:igcreation}, \gls{IG} nodes can be either non-hierarchical virtual registers or roots of a hierarchical virtual register.
+In the latter case, such a node contains more than one leaf registers as shown in \cref{fig:igraph2}.
+\texttt{selectColors} gets a vector \texttt{leafs} as first argument that contains references to all leaf registers of the \gls{IG} node to be colored.
+For the TriCore example from \cref{fig:igraph1}, \texttt{selectColors} would be called with a vector of length 1 containing only \texttt{d\_6105}.
+For \cref{fig:igraph2}, however, \texttt{leafs} would contain the two elements \texttt{d\_6117} and \texttt{d\_6119} if \gls{IG} node \texttt{e\_6115} is supposed to be colored.
+
+The current \gls{IG} is passed as second argument to \texttt{selectColors}.
+The method returns a color map assigning a unique color to each register from vector \texttt{leafs}.
+A color map is basically defined as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+using WIR_ColorMap = ästd::mapäæ<æästd::reference_wrapperäæ<æWIR_VirtualRegisteræ>æ, @unsigned int@æ>æ;
+\end{lstlisting}
+\\
+For a (reference to a) leaf register, the color map stores the number of the assigned color.
+The following invariants must hold for a color map returned by \texttt{selectColors}:
+\begin{itemize}
+  \item The color map either contains exactly one entry for each leaf register from vector \texttt{leafs}, or it is completely empty.
+  The latter situation means that no valid colors were found in the current \gls{IG} for the considered \gls{IG} node so that it will become an actual spill.
+  \item No color stored in the color map must already be used for an \gls{IG} node adjacent to the current node.
+\end{itemize}
+
+The implementation of \texttt{selectColors} is entirely left to the developer, as long as the above invariants are respected.
+It is good practice to use method \texttt{WIR\_InterferenceGraph::getPossibleColors} in order to address the second invariant above.
+For an \gls{IG} node represented by a virtual leaf register, \texttt{getPossibleColors} returns a set of unsigned integers/colors such that none of these returned colors is used for adjacent nodes.
+
+For the TriCore architecture, \texttt{selectColors} first of all retrieves the set of possible colors exactly in this way.
+After that, the two cases from \cref{fig:igraph1,fig:igraph2} are distinguished.
+For just one leaf node to be colored, \texttt{selectColors} uses a list of feasible physical data or address registers that is ordered according to a processor-specific precedence order.
+E.g., the physical data registers \texttt{D15} down to \texttt{D8} shall be used first in this order for coloring whenever possible.
+With lower priority, registers \texttt{D1}, \texttt{D0} and so on should be used.
+By iterating through this precedence list and checking whether the physical register's color actually is possible, the color selection is performed this way.
+For hierarchical registers with two leafs, a similar precedence order of matching physical extended registers is iterated and it is checked whether the colors of both physical leaf registers are actually available within the current \gls{IG}.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Spill Code Generation}
+\label{ssec:spillcode}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+The generation of spill code for an \gls{IG} node marked as actual spill in principle boils down to creating a spill-store after each definition of a virtual register, and to inserting a spill-load before each use of a virtual register.
+This is illustrated using the following TriCore example where virtual register \texttt{d\_42} is assumed to be an actual spill: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+add     %d_42, %d_6115, §#364§          Ü\color{gray}{\itshape \# d\_42 := d\_6115 + 364, definition of d\_42.}Ü
+[...]
+mul     %d_6117, %d_42, %d_123        Ü\color{gray}{\itshape \# d\_6117 := d\_42 * d\_123, use of d\_42.}Ü
+[...]
+sh      %d_42, §#4§                     Ü\color{gray}{\itshape \# d\_42 := d\_42 >{}> 4, definition and use of d\_42.}Ü
+\end{lstlisting}
+\\
+By inserting spill-stores after \texttt{add} and \texttt{sh} and spill-loads before \texttt{mul} and \texttt{sh}, the live range of the original virtual register \texttt{d\_42} -- which originally covers the entire code example above -- gets split into three distinct live ranges which are much smaller.
+For each of these smaller live ranges of \texttt{d\_42}, the \gls{WIR} register allocator creates a new virtual register which is called a spill-clone of \texttt{d\_42}.
+For the above example, we assume that spill-clones named \texttt{d\_9000}, \texttt{d\_9001} and \texttt{d\_9002} are introduced.
+Spilling would thus transform the above code to: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+add     %d_9000, %d_6115, §#364§        Ü\color{gray}{\itshape \# d\_9000 := d\_6115 + 364.}Ü
+st.w    [%a10] §0§, %d_9000             Ü\color{gray}{\itshape \# Spill-store d\_9000 alias d\_42 to stack-position 0.}Ü
+[...]
+ld.w    %d_9001, [%a10] §0§             Ü\color{gray}{\itshape \# Spill-load d\_9001 alias d\_42 from stack-position 0.}\label{lst:spillload1}Ü
+mul     %d_6117, %d_9001, %d_123      Ü\color{gray}{\itshape \# d\_6117 := d\_9001 * d\_123.}Ü
+[...]
+ld.w    %d_9002, [%a10] §0§             Ü\color{gray}{\itshape \# Spill-load d\_9002 alias d\_42 from stack-position 0.}Ü
+sh      %d_9002, §#4§                   Ü\color{gray}{\itshape \# d\_9002 := d\_9002 >{}> 4.}Ü
+st.w    [%a10] $0$, %d_9002             Ü\color{gray}{\itshape \# Spill-store d\_9002 alias d\_42 to stack-position 0.}Ü
+\end{lstlisting}
+\\
+Note that spilling does not replace any virtual register marked as actual spill by some kind of physical register -- the created spill-clones are all virtual registers which require some color assignment later on.
+Due to the fact that the original register's live range has been split significantly, it is quite likely that the virtual spill-clones can be colored successfully.
+This is the reason why the general graph coloring algorithm sketched on \cpageref{enum:startover} features \cref{enum:startover}: since spill code generation introduces other virtual registers, a start over of the entire algorithm is required.
+
+The actual generation of such spill code is done by the purely virtual methods \texttt{insertSpillLoad} and \texttt{insert\-SpillStore}.
+When retargeting the \gls{WIR} register allocator, both of them thus have to be overloaded and the new register allocator's header file has to be extended by the following method declarations: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @void@ insertSpillLoad@(@ const WIR_BaseRegister æ&æclone, const WIR_BaseRegister æ&ær, @int@ stackPos,
+                              WIR_BasicBlock æ&æb,
+                              ästd::listäæ<æä
+                                std::reference_wrapperäæ<æWIR_Instructionæ>>::æconst_iterator pos @)@ override;
+
+virtual @void@ insertSpillStore@(@ const WIR_BaseRegister æ&æclone, const WIR_BaseRegister æ&ær, @int@ stackPos,
+                               WIR_BasicBlock æ&æb,
+                               ästd::listäæ<æä
+                                 std::reference_wrapperäæ<æWIR_Instructionæ>>::æconst_iterator pos @)@ override;
+\end{lstlisting}
+
+These two methods expect references to both the spill-clone \texttt{clone} and the original actual spill register \texttt{r} as first two arguments.
+The latter register \texttt{r} is provided mostly for debugging purposes, the actual spill code generation usually only deals with \texttt{clone}.
+The next integer argument denotes the stack pointer-relative offset to or from which the register has to be spilled.
+The spill position, i.e., the location where the actual spill occurs as definition or use, is specified by arguments \texttt{b} and \texttt{pos}.
+The former is a reference to the \gls{WIR} basic block containing the spill position, and the latter is an iterator that refers to the position in the basic block's instruction sequence before which the generated spill code shall be inserted.
+Using these arguments, \texttt{insertSpillLoad} inserts code realizing one single spill-load, e.g., the one from \cref{lst:spillload1} above.
+Likewise, \texttt{insertSpillStore} generates code for spill-storing exactly one definition of an actual spill.
+
+However, the actual task to create one single spill is more complex than it seems at first glance.
+A first aspect to be considered by \texttt{insertSpillLoad} and \texttt{insertSpillStore} are the various types of registers that an architecture might feature.
+E.g., the TriCore \gls{ISA} provides different load and store operations for address, data or extended registers.
+Depending on the type of a virtual register to be spilled, different flavors of spill-loads and spill-stores need to be created.
+
+Furthermore, the stack pointer-relative offset \texttt{stackPos} passed to \texttt{insertSpillLoad} and \texttt{insertSpillStore} is fully unaware of a machine's addressing modes and other \gls{ISA}-related constraints such as bit widths etc.
+For example, the \texttt{st.w} and \texttt{ld.w} operations from the above code use the TriCore's base+offset addressing mode allowing signed stack offsets of up to 16 bits width.
+If, however, \texttt{stackPos} becomes larger than these 16 bits, both spilling methods must generate extra code computing a pointer to the desired spill location on the stack.
+Alternatively, the stack pointer might need to be adjusted temporarily so that the spill's stack location becomes within reach using 16 bits wide offsets.
+This stack pointer adjustment of course needs to be reverted after the spill instruction.
+
+Finally, spilling might also become difficult depending on the position \texttt{pos} where to insert the spill code.
+This is espacially the case if \texttt{pos} is the \texttt{std::end} iterator, i.e., if spill code shall be inserted at the very end of basic block \texttt{b}.
+In this case, care has to be taken if \texttt{b} ends with some branch or call operation.
+This prevents to insert the spill code into \texttt{b}, because branches or calls always have to be the very last operation of a basic block.
+The implication of this is that the spill code needs to be inserted into the successor block of \texttt{b} in the \gls{CFG}.
+Attention then has to be paid if \texttt{b} has several successors, or if \texttt{b} has only one successor that can, however, be also reached from other basic blocks.
+Potentially, \texttt{insertSpillLoad} and \texttt{insertSpillStore} have to create a new basic block to accomodate the spill code, and this new basic block must be properly inserted into the \gls{CFG}.
+
+In any case, the \gls{WIR} graph coloring algorithm requires that \texttt{insertSpillLoad} stores all newly created instructions for spill-loading a register in a map \texttt{mSpillLoads}, and similarly for \texttt{insertSpillStore} and map \texttt{mSpillStores}.
+This includes all instructions to compute large stack offsets or to set the stack pointer back and forth, in addition to the actual spill-loads and -stores themselves.
+Maps \texttt{mSpillLoads} and \texttt{mSpillStores} are declared as \texttt{std::map<WIR\_id\_t, std::list<std::list<std::reference\_wrapper<WIR\_Instruc\-tion>{}>{}>{}>}.
+They map the unique ID of the root register of the actual spill \texttt{r} to a list of spills.
+For each spill position of \texttt{r} in the \gls{WIR} code, a new entry is added to this list of spills.
+And one such entry in turn consists of a list of (references to) potentially several instructions created for one spill position.
+
+The graph coloring algorithm supports any arbitrary kind of hierarchical registers, also during spilling.
+This implies that proper stack locations have to be determined also for child registers if a hierarchical register should be spilled.
+This is the purpose of the purely virtual method \texttt{getStackPosOfSubReg}.
+The new register allocator's header file thus has to be extended by the following declaration: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @unsigned int@ getStackPosOfSubReg@(@ const WIR_VirtualRegister æ&ær,
+                                          @unsigned int@ rootPos @)@ const override;
+\end{lstlisting}
+\\
+This method gets a reference to a virtual child register \texttt{r} as well as the stack position of the root of \texttt{r}'s hierarchy as argument.
+It returns the processor-specific stack position of child \texttt{r} based on where on the stack the whole register hierarchy resides.
+
+In exceptional cases, it can happen that the graph coloring algorithm's main loop (from \crefrange{enum:build}{enum:startover} on \cpageref{enum:build}) is unable to color to all \gls{IG} nodes.
+This can happen only for the very short code sequences ranging from a spill-load to an actual spill's use, or from an actual spill's definition to its spill-store.
+The purpose of \cref{enum:uncolspills} thus is to also color these remaining uncolored actual spills.
+For each uncolored actual spill, this happens by selecting one currently occupied physical register, spilling it out onto the stack, using it to color the uncolored spill, and finally spilling in the original value of the physical register.
+
+This task is supported by the purely virtual methods \texttt{getCandidatePhregs} and \texttt{getCandidatePhreg} which thus also have to be overloaded by a retargeted graph coloring-based register allocator.
+For this reason, the allocator's header file needs to be extended as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual WIR_PhysicalRegisterSet getCandidatePhregs@(@ const WIR_VirtualRegister æ&ær @)@ override;Ü\label{lst:uncolspill1}Ü
+
+virtual const WIR_PhysicalRegister æ&ægetCandidatePhreg@(@ const WIR_PhysicalRegisterSet æ&æcandidates @)@ override;Ü\label{lst:uncolspill2}Ü
+\end{lstlisting}
+\\
+For a still uncolored actual spill represented by virtual register \texttt{r}, \texttt{getCandidatePhregs} returns a set of possible physical registers than can potentially be used to color \texttt{r}.
+It is important to note here that \texttt{getCandidatePhregs} does not consider any coloring constraints encoded by the \gls{IG} (cf. \cref{def:gc}) at all.
+Instead, this method only checks processor-specific constraints such as register types.
+E.g., for the TriCore example, if the actually spilled register \texttt{r} represents a virtual data register, \texttt{getCandidatePhregs} returns a set containing all physical data registers of the TriCore architecture.
+Since the graph coloring algorithm failed to color the actual spill \texttt{r}, the \gls{IG} node representing \texttt{r} must have so many (colored) neighbors so that no color remains for \texttt{r} itself.
+Due to this, it would not make sense to consider the current \gls{IG} in \texttt{getCandidatePhregs}.
+Furthermore, \texttt{getCandidatePhregs} returns an unordered set of (references to) physical candidate registers.
+This implies that iterating through this returned set does not happen in a certain order, i.e., no kind of precedence of one physical candidate register over another is provided by \texttt{getCandidatePhregs}.
+
+Among all possible candidates provided by \texttt{getCandidatePhregs}, the generic graph coloring algorithm eliminates those leading to high costs if they were used to color virtual register \texttt{r}.
+After this, the set of candidate registers contains one or several physical registers with the same, minimal costs.
+In order to break the tie, this current set of candidate registers is passed to \texttt{getCandidatePhreg} which selects one physical register from the set of candidates and returns it.
+Here, processor-specific precedence rules can be implemented which give priority to one register over another.
+
+After all uncolored spills have been colored, the last \cref{enum:redspills} of the algorithm from \cpageref{enum:redspills} is to optimize the finally generated spill code by removing redundant spills.
+Spills are redundant in the following situations:
+\begin{itemize}
+  \item A physical register is only spill-stored to a certain stack location, but never spill-loaded from it (due to rematerialization, cf. \cref{ssec:rematerialization}).
+  Then, the spill-stores are redundant.
+  \item If a spill-load of a physical register from a stack location is immediately followed by a spill-store of the same physical register to the same stack location, the spill-store is redundant.
+  \item Likewise for a spill-store directly followed by a spill-load, turning the spill-load redundant.
+  \item Consecutive sequences of two spill-stores (or two spill-loads) of the same physical register to/from the same stack position are also redundant, one spill from the sequence can be eliminated.
+\end{itemize}
+
+As discussed earlier in this section, a spill can consist of several \gls{WIR} instructions performing address arithmetics and/or stack pointer adjustment, besides the actual load or store operation.
+Due to the complexity of such potential code patterns, it is not clear a priori which physical register actually gets spilled by a sequence of spill instructions.
+For this reason, the purely virtual method \texttt{getPhregOfSpill} is used while removing redundant spills.
+As a consequence, the header file of a retargeted register allocator needs to be extended as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual WIR_PhysicalRegister æ&ægetPhregOfSpill@(@ const ästd::listäæ<æästd::reference_wrapperäæ<æWIR_Instructionæ>> &æspill @)@ override;
+\end{lstlisting}
+\\
+The processor-specific implementation of this method examines the list \texttt{spill} of spill instructions and compares it with all code patterns that methods \texttt{insertSpillLoad} or \texttt{insertSpillStore} could actually produce.
+By exploiting these code patterns, the physical register that actually gets spilled is returned by \texttt{getPhregOfSpill}.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Rematerialization}
+\label{ssec:rematerialization}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+An improved variant of spilling is rematerialization.
+Spill-storing a virtual register and later loading it from the system's stack is quite costly.
+In some cases, it might be cheaper to simply recompute the virtual register's value instead of spilling it in and out.
+This especially holds if the operation(s) required for such a recomputation do not result in memory accesses themselves, i.e., if these rematerialization operations do not depend on spilled registers in turn.
+
+A typical example where rematerialization is worthwhile are virtual registers that simply contain a constant value.
+Here, spill-storing this constant and loading it back from the system's stack is overly inefficient.
+Instead, just generating the one or two operations required to recreate the constant again is usually much cheaper.
+
+In order to enable rematerialization for a retargeted graph coloring-based register allocator, the virtual methods \texttt{getRematerializationCosts} and \texttt{getRematerializationInstructions} have to be overloaded by extending its header file as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @unsigned int@ getRematerializationCosts@(@ const WIR_RegisterParameter æ&æp @)@ const override;
+
+virtual ästd::listäæ<æWIR_Instruction æ*>æ getRematerializationInstructions@(@ const WIR_RegisterParameter æ&æp @)@ const override;
+\end{lstlisting}
+\\
+For a given virtual register parameter \texttt{p}, \texttt{getRematerializationCosts} returns the costs if \texttt{p} gets rematerialized.
+In analogy to the spill cost computation already discussed in \cref{ssec:spillcosts}, it is left fully open what such rematerialization costs shall represent for a concrete processor architecture.
+
+Referring the running TriCore example, spill and rematerialization costs model the additional latency in clock cycles due to the newly inserted code.
+For the sake of simplicity, the TriCore implementation only rematerializes register parameters that contain a known constant number.
+In this case, the rematerialization costs boil down to the latencies of one or two TriCore operations that reload the register with its constant value.
+
+\texttt{getRematerializationInstructions} returns the list of \gls{WIR} instructions that are needed to rematerialize the given register parameter \texttt{p}.
+The code patterns that can be created by \texttt{getRematerializationInstructions} are finally also subject to the removal of redundant spill code as discussed at the end of \cref{ssec:spillcode}.
+Thus, method \texttt{getPhregOfSpill} should also be extended such that it recognizes rematerialization code for a specific processor architecture and also returns the physical register that is actually rematerialized by some spill code.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Cross-Cutting Issues}
+\label{ssec:crosscutting}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+All the retargeting actions described previously have a clear relation to one of the graph coloring algorithm's main steps listed on \cpageref{enum:build}.
+However, porting the \gls{WIR} register allocator to another processor architecture poses additional technical challenges that cannot be attributed to the algorithm's main steps.
+Instead, some issues have a cross-cutting nature so that various different parts of the allocator might need to be touched during retargeting.
+Prime examples are the correct handling of virtual registers that are alive during function calls (cf. \cref{sssec:vregscalls}) and stack frame management (cf. \cref{sssec:stackmgmt}).
+Finally, \cref{sssec:misc} briefly lists additional places inside the \gls{WIR} graph coloring algorithm where processor-specific code could be added.
+
+
+% -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+\subsubsection{Calling Conventions and Registers Alive During Function Calls}
+\label{sssec:vregscalls}
+% -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+\gls{ABI} specifications regularly define which registers have to be used to pass arguments and return values for a function call, and which registers are caller- and callee-saved.
+Such calling conventions of course must be respected by the \gls{WIR} register allocator, requiring processor-specific extensions at various places.
+
+In order to motivate the issues related to calling conventions and function calls, the below example shows a simple TriCore code snippet before register allocation: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+main:   [...]
+        mov     %d_6077, §#42§Ü\label{lst:callconv1}Ü
+        ld.w    %d_6082, Ü\emph{<addr1>}ÜÜ\label{lst:callconv2}Ü
+        ld.w    %d_6093, Ü\emph{<addr2>}ÜÜ\label{lst:callconv3}Ü
+        mov     %d_6104/D4, %d_6082Ü\label{lst:callconv4}Ü
+        mov     %d_6109/D5, %d_6093Ü\label{lst:callconv5}Ü
+        call    fooÜ\label{lst:callconv6}Ü
+.L6122: mov     %d_6133, %d_6126/D2Ü\label{lst:callconv7}Ü
+        mul     %d_6138, %d_6077, %d_6133Ü\label{lst:callconv8}Ü
+        [...]
+\end{lstlisting}
+\\
+The instructions from \crefrange{lst:callconv1}{lst:callconv3} load virtual registers \texttt{d\_6077}, \texttt{d\_6082} and \texttt{d\_6093} with some values.
+According to the TriCore calling conventions, physical registers \texttt{D4} and \texttt{D5} serve argument passing, \texttt{D2} for return value passing.
+Thus, the operations from \cref{lst:callconv4,lst:callconv5} provide the arguments for some function \texttt{foo} by moving virtual register \texttt{d\_6082} (\texttt{d\_6093}, resp.) to register \texttt{d\_6104} which is precolored with \texttt{D4} (\texttt{d\_6109} and \texttt{D5}, resp.).
+After that, function \texttt{foo} is called in \cref{lst:callconv6}.
+
+The result returned by \texttt{foo} must reside in physical register \texttt{D2} so that \cref{lst:callconv7} stores it by moving \texttt{d\_6126} precolored with \texttt{D2} to virtual register \texttt{d\_6133}.
+Finally, some other operations follow in \cref{lst:callconv8} and later.
+
+The first important point visible from this example is that the plain function call from \cref{lst:callconv6} by itself does not provide any information about its adherance to some calling conventions.
+In particular, the \texttt{call} operation shown above is fully unaware of which registers are read and written in the context of this function call.
+However, such information is crucial for a proper liveness analysis and the correctness of register allocation.
+The \gls{WIR} register allocator has no means to reverse-engineer this information from the code and to validate that a call complies to a given calling convention.
+Due to this, the register allocator expects that every function call comes with implicit register parameters (cf. \cref{sec:operations}) that read and write all registers involved in argument and return value passing.
+
+When including these implicit parameters, the output of the call operation would look as follows: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+        [...]
+        call    fooÜ\textcolor{gray}{, \%d\_6104/D4 (use), \%d\_6109/D5 (use), \%d\_6126/D2 (def)}ÜÜ\label{lst:callconv9}Ü
+        [...]
+\end{lstlisting}
+
+\begin{wirNote}
+  As motivated above, the register allocator is unable to determine registers used and defined by a function call according to some calling convention.
+  It thus lies in the responsibility of \gls{WIR}-based compiler passes prior to register allocation to add this information in the form of implicit parameters to all function calls.
+\end{wirNote}
+
+The second crucial issue demonstrated by the above example is that virtual registers can be alive across a function call.
+This is the case for \texttt{d\_6077} which is defined in \cref{lst:callconv1} before the call and used in \cref{lst:callconv8} after the call.
+If the register allocator decides during \cref{enum:select} from \cpageref{enum:select} to allocate \texttt{d\_6077} to some caller-saved physical register, e.g., \texttt{D0}, the function call might potentially overwrite \texttt{D0} and this way invalidate the contents of \texttt{d\_6077}.
+
+In order to prevent such an illegal overwriting of the caller-saved register, the register allocator has to insert a spill-store of \texttt{d\_6077/D0} before the call, and a spill-load right after the call, as shown in the following code: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+main:   [...]
+        mov     %d_6077/D0, §#42§
+        ld.w    %d_6082, Ü\emph{<addr1>}Ü
+        ld.w    %d_6093, Ü\emph{<addr2>}Ü
+        st.w    Ü\emph{<addr3>}Ü, %d_6077/D0           Ü\color{gray}{\itshape \# Spill-store of caller-saved register D0.}ÜÜ\label{lst:callconv10}Ü
+        mov     %d_6104/D4, %d_6082
+        mov     %d_6109/D5, %d_6093
+        call    foo                           Ü\color{gray}{\itshape \# Function call potentially overwriting D0.}Ü
+.L6122: mov     %d_6133, %d_6126/D2Ü\label{lst:callconv11}Ü
+        ld.w    %d_6077/D0, Ü\emph{<addr3>}Ü           Ü\color{gray}{\itshape \# Spill-load of caller-saved register D0.}ÜÜ\label{lst:callconv12}Ü
+        mul     %d_6138, %d_6077/D0, %d_6133
+        [...]
+\end{lstlisting}
+\\
+By introducing the load and store operations from \cref{lst:callconv10,lst:callconv12}, the register's contents is saved and restored in the context of the call which results in a proper implementation of the caller-saved policy mandated by the \gls{ABI}.
+
+For the proper handling of such situations, the register allocator obviously needs to be aware of whether a given register is caller-saved or not.
+For this purpose, the purely virtual method \texttt{isCallerSaved} has to be provided by extending the new allocator's header file as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ isCallerSaved@(@ const WIR_PhysicalRegister æ&ær @)@ const override;
+\end{lstlisting}
+\\
+This method simply returns \texttt{true} if the given physical register \texttt{r} is caller-saved, and \texttt{false} otherwise.
+
+Another required Boolean predicate to be overloaded is \texttt{isFunctionReturnMove} below: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ isFunctionReturnMove@(@ const WIR_Operation æ&æo @)@ const override;
+\end{lstlisting}
+\\
+It returns \texttt{true} iff the given operation \texttt{o} is a move that stores a function's return value in some other register.
+More precisely, this method indicates moves that immediately follow a call operation and where the used register parameter is a return value passing register according to some processor's \gls{ABI}.
+E.g., this method is used to identify the move from \cref{lst:callconv11} so that caller-saving spill-loads can be placed right after it.
+Furthermore, coalescing has to be avoided for such particular moves, which is a second use case of \texttt{isFunctionReturnMove}.
+
+The most important method that a retargeted register allocator requires for the handling of caller-saved registers is called \texttt{checkCallerSavedRegsAliveAcrossCall}.
+Since the argument list of this method already might depend on processor-specific details, this method is not a classical virtual method that needs to be overloaded.
+In the following, we are explaining the purpose of this method by using the TriCore implementation of the graph coloring-based register allocator as running example.
+Here, this method is declared as follows in the allocator's header file: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+@void@ checkCallerSavedRegsAliveAcrossCall@(@ const WIR_PhysicalRegister æ&æphreg,
+                                          const WIR_RegisterSet æ&ævregs_c1,
+                                          const WIR_RegisterSet æ&ævregs_c2 @)@;
+\end{lstlisting}
+\\
+An \gls{IG} node represents either a non-hierarchical virtual register or the root of a complex register hierarchy.
+In the latter case, such a root node can have several leaf registers.
+Method \texttt{checkCallerSavedRegsAliveAcross\-Call} expects all these leafs of an \gls{IG} node as arguments \texttt{vregs\_c1}, \texttt{vregs\_c2}, \dots
+Furthermore, coalescing can have the effect that a single virtual register can have several aliases that stem from merging move-related \gls{IG} nodes.
+For this reason, these leaf registers are given as sets of virtual registers.
+
+For the above TriCore example, \texttt{vregs\_c1} contains the virtual register being the first leaf of an \gls{IG} node, including its coalescing-related aliases.
+If an \gls{IG} node represents a non-hierarchical virtual register, set \texttt{vregs\_c2} is empty.
+Otherwise, it contains the second virtual leaf register of the \gls{IG} node and its respective aliases.
+
+If the \gls{IG} node specified this way is assigned to a caller-saved physical register \texttt{phreg}, and if the virtual registers from sets \texttt{vregs\_c1} and \texttt{vregs\_c2} are alive across a function call, then the caller-saving spills have to be created as discussed on \cpageref{lst:callconv12}.
+The purpose of method \texttt{checkCallerSavedRegsAliveAcrossCall} is to identify such situations and to keep track of which registers need to be spill-stored and -loaded before and after a call.
+
+By exploiting the generic nature of \gls{WIR} analyses, the register allocator's processor-independent base class computes a map \texttt{mVregsAliveAcrossCall} that maps each \gls{WIR} instruction containing a function call to the set of virtual registers that are alive across this call.
+This map is basically declared as \texttt{std::map<std::reference\-\_wrapper<WIR\_Instruction>, WIR\_VirtualRegisterSet>}.
+For the example from \cpageref{lst:callconv6}, map \texttt{mVregs- AliveAcrossCall} contains an entry for the call from \cref{lst:callconv6} that states that the registers from set \{\texttt{d\_6077}\} are alive across this call.
+
+If physical register \texttt{phreg} is caller-saved, method \texttt{checkCallerSavedRegsAliveAcrossCall} then traverses map \texttt{mVregsAliveAcrossCall} and checks whether any virtual register from sets \texttt{vregs\_c1} or \texttt{vregs\_c2} shows up in the current map entry.
+If this is the case, \texttt{checkCallerSavedRegsAliveAcrossCall} stores in map \texttt{mLocalCallerSavedRegsAliveAcrossCall} that the physical register assigned to the currently considered virtual leaf requires caller-saving at the call of the current map entry.
+
+Note that \texttt{checkCallerSavedRegsAliveAcrossCall} does not generate the actual spill code implementing the caller-saved policy.
+This is performed during \cref{enum:callsave} of the entire algorithm from \cpageref{enum:callsave}.
+However, a special case arises if \texttt{phreg} is one of the return-value passing registers and the function call implicitly overwrites this physical register as shown in the following example: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+main:   [...]
+        mov     %d_6077/D2, §#42§Ü\label{lst:callconv13}Ü
+        st.w    Ü\emph{<addr3>}Ü, %d_6077/D2           Ü\color{gray}{\itshape \# Spill-store of caller-saved register D2.}ÜÜ\label{lst:callconv14}Ü
+        call    fooÜ\textcolor{gray}{, \%d\_6126/D2 (def)}Ü         Ü\color{gray}{\itshape \# Function call overwriting D2.}ÜÜ\label{lst:callconv15}Ü
+.L6122: mov     %d_6133, %d_6126/D2Ü\label{lst:callconv16}Ü
+        ld.w    %d_6077/D2, Ü\emph{<addr3>}Ü           Ü\color{gray}{\itshape \# Spill-load of caller-saved register D2.}ÜÜ\label{lst:callconv17}Ü
+        mul     %d_6138, %d_6077/D2, %d_6133
+        [...]
+\end{lstlisting}
+\\
+The spill-store and the spill-load from \cref{lst:callconv14,lst:callconv17} ensure the semantical correctness of the code during the function call in \cref{lst:callconv15}.
+However, while allocating \gls{IG} nodes to physical registers, these two spills are not yet present in the \gls{WIR} code, leading to wrong def-use relationships.
+In particular, the \texttt{mov} from \cref{lst:callconv13} writes some value to \texttt{d\_6077/D2} that gets immediately overwritten by the call from \cref{lst:callconv15}.
+The definition of \texttt{d\_6077/D2} in \cref{lst:callconv13} does not reach a proper use if the spill instructions were not present in the above code.
+
+For this reason, \texttt{checkCallerSavedRegsAliveAcrossCall} also has the task to identify such special situations and to store that the function call shall be extended by another implicit parameter using \texttt{d\_6077/D2}: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+        [...]
+        call    fooÜ\textcolor{gray}{, \%d\_6126/D2 (def), D2 (use)}ÜÜ\label{lst:callconv18}Ü
+        [...]
+\end{lstlisting}
+\\
+This is achieved by adding a new entry to list \texttt{mLocalDummyParameters} consisting of a pair with the physical register (\texttt{D2} in the current example) and the call from \cref{lst:callconv15}.
+
+This method \texttt{checkCallerSavedRegsAliveAcrossCall} now needs to be used in two places.
+The first is inside method \texttt{selectColors} where a color map is computed for the leaf registers of some \gls{IG} node (cf. \cref{ssec:colorselect}).
+For each entry that \texttt{selectColors} adds to the resulting color map, \texttt{checkCallerSavedRegsAliveAcross\-Call} needs to be invoked.
+
+The second place is inside method \texttt{getCandidatePhreg} that selects a physical register to be used for some uncolored actual spill (cf. \cref{lst:uncolspill2} on \cpageref{lst:uncolspill2}).
+For the physical register determined here, again \texttt{checkCaller\-SavedRegsAliveAcrossCall} has to be called.
+
+The actual generation of the loads and stores implementing a caller-saving policy is done in a processor-inde\-pen\-dent way by method \texttt{applyCallerSavingPolicy} of the generic base class \texttt{WIR\_GraphColoring}.
+This method is virtual so that it can be overloaded by derived register allocators if the realized default implementation is insufficient for some actual processor architecture.
+
+
+% -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+\subsubsection{Stack Frame Management}
+\label{sssec:stackmgmt}
+% -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+The generation of spill code implies that additional space needs to be reserved within the stack frame of the currently allocated \gls{WIR} function.
+This is the purpose of the purely virtual method \texttt{adjustStack} which thus has to be overridden as follows by derived register allocators: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @void@ adjustStack@(@ WIR_Function æ&æf @)@ override;
+\end{lstlisting}
+\\
+This method gets a reference to the currently allocated \gls{WIR} function \texttt{f} as argument.
+Using internal attributes of the register allocator such as \texttt{mAdditionalStackSpace} (an unsigned integer storing how many additional bytes are required in the stack frame for spilling) or \texttt{mInsertedSpillCode} (a list of references to all spill instructions inside \texttt{f}), the \gls{WIR} code of \texttt{f} gets adjusted.
+
+As already stated earlier (cf. the note on future work on \cpageref{fw:stackframe}), \gls{WIR} currently provides no structured model of a function's stack frame layout.
+This makes the adjustment of the stack frame a more or less tedious task.
+
+The first step is to identify the very first instruction(s) inside function \texttt{f} that allocate the current stack frame by decreasing or increasing the stack pointer by a given number of bytes.
+In their current implementations for RISC-V and TriCore, \texttt{adjustStack} simply matches a few typical, hard-coded patterns for stack allocating code and extracts the current stack frame size from them.
+
+Next, the additional stack capacity from \texttt{mAdditionalStackSpace} is added to the current stack frame size, where processor-specific alignment requirements might apply.
+The identified stack allocating code is then modified such that the stack pointer is increased/decreased by the new byte size of the stack frame.
+
+The rest of \texttt{adjustStack} deals with potential adjustments of existing accesses to the stack frame within the \gls{WIR} code of \texttt{f}.
+Here, issues can arise depending on the strategic decision where in a function's stack frame the spill area shall be.
+The generic register allocator uses stack pointer-relative offsets for spills beginning with 0.
+These offsets are passed as argument \texttt{stackPos} to methods \texttt{insertSpillLoad} and \texttt{insertSpillStore} (cf. \cref{ssec:spillcode}).
+Assuming a stack growing downwards to the lower addresses, such a scheme places spills at the bottom of a stack frame, very close to the stack pointer.
+This is beneficial for architectures supporting only a rather narrow range of offsets that can be used by stack pointer-relative load or store operations.
+
+However, many \gls{ABI}s~\cite{riscv22,tricore07} mandate that this region at the very bottom of a stack frame is exclusively reserved for so-called overflow arguments.
+Thus, the current implementations of the RISC-V and TriCore register allocators keep the overflow region at the bottom of the stack frame, followed by the region for spills residing above it, and finally followed by the region containing the local data of function \texttt{f} at the top of the stack frame.
+
+Placing the spill region ``in the middle'' of the stack frame leads to the following issues:
+\begin{itemize}
+  \item The offsets of spill instructions in general do not start with 0, but must be adjusted such that they start from the actual size of the overflow region.
+  \item The stack region containing the function's local data is shifted upwards in the stack frame by the size of the spilling region, this way invalidating the offsets of all existing stack accesses.
+\end{itemize}
+
+The first issue is solved within the RISC-V- and TriCore-specific implementations of methods \texttt{insertSpillLoad} and \texttt{insertSpillStore}.
+These implementations assume that the size of the overflow region has been stored somewhen before register allocation using method \texttt{setFrameSize} (cf. \cref{lst:stackframe} on \cpageref{lst:stackframe}).
+By using \texttt{getFrameSize}, the methods \texttt{insertSpillLoad} and \texttt{insertSpillStore} are able to add the size of this overflow region to the stack offset from \texttt{stackPos} and this way generate appropriate spill code accessing the region above the overflow region.
+
+The second issue is resolved within \texttt{adjustStack} by iterating over the entire code of function \texttt{f}, identifying all accesses to the local data region, and adjusting their stack offsets by the size of the spill region.
+During this process, however, any spill operations or accesses to the overflow region must not be adjusted, since their stack offsets are already correct.
+The current RISC-V and TriCore implementations of \texttt{adjustStack} thus assume that operations accessing the overflow region are marked by locking at least one of its parameters with \texttt{setDontOptimize} (cf. \cref{lst:dontoptimize} on \cpageref{lst:dontoptimize}).
+
+\begin{wirFutureWork}
+The authors of the \gls{WIR} software and of this document are fully aware of the ugliness of this part of the register allocator.
+
+One solution to getting rid of the need to adjust existing accesses to the local data stack region would be to allocate the spill region at the top of the stack frame.
+This could, however, result in rather large offsets of spill code which go beyond what typical addressing modes could support.
+Supporting such large stack offsets could potentially result in lots of additional code having a severe performance and code size impact.
+
+The best solution is to add a well-designed model of stack frames and their internal organization to \gls{WIR} functions.
+This is planned for the near future.
+\end{wirFutureWork}
+
+
+% -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+\subsubsection{Miscellaneous}
+\label{sssec:misc}
+% -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -  -
+
+In addition to all the virtual methods of the \gls{WIR} register allocator discussed up to this point, class \texttt{WIR\_Graph\-Coloring} provides many more opportunities to tweak the allocator's behavior for a specific processor architecture.
+This can be achieved by overloading the following virtual methods so that processor-specific behavior can be realized instead of the allocator's default implementations: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ isPriorityRegister@(@ const WIR_VirtualRegister æ&ær @)@ const;Ü\label{lst:ravirtmethods1}Ü
+virtual WIR_Operation æ&æselectCoalescingCandidate@(@ const WIR_InterferenceGraph æ&æigraph,Ü\label{lst:ravirtmethods2}Ü
+                                                  const WIR_OperationSet æ&æworkListMoves @)@ const;
+virtual WIR_VirtualRegister æ&æselectSpillCandidate@(@ const WIR_InterferenceGraph æ&æigraph,Ü\label{lst:ravirtmethods3}Ü
+                                                   const WIR_VirtualRegisterSet æ&æworkListSpill @)@ const;
+virtual @unsigned int@ getStackSize@(@ const WIR_BaseRegister æ&ær @)@ const;Ü\label{lst:ravirtmethods4}Ü
+virtual @void@ postRACleanup@(@ WIR_Function æ&æf @)@;Ü\label{lst:ravirtmethods5}Ü
+\end{lstlisting}
+\\
+Method \texttt{isPriorityRegister} (\cref{lst:ravirtmethods1}) serves to identify virtual registers \texttt{r} that shall get a high priority during graph simplification (\cref{enum:simplify} from \cpageref{enum:simplify}).
+A high priority means that such a virtual register is put at the very front of the allocator's worklists so that it is likely (though not guaranteed) that a free color can be found.
+In its default implementation, \texttt{isPriorityRegister} always returns \texttt{false}.
+As an example, it is overloaded by the TriCore register allocator such that registers serving as counters in \texttt{loop} operations get high priority and thus most likely are not spilled.
+
+During \cref{enum:coalesce} from \cpageref{enum:coalesce}, one move operation out of possibly many ones needs to be selected for coalescing.
+For this purpose, \texttt{selectCoalescingCandidate} (\cref{lst:ravirtmethods2}) is called with the current \gls{IG} and the set of move operations being coalescing candidates as arguments.
+In its default implementation, this method choses the move with the highest loop nesting depth.
+Like this, the allocator strives to keep the performance-critical bodies of innermost loops free of unnecessary moves whenever possible.
+
+Method \texttt{selectSpillCandidate} (\cref{lst:ravirtmethods3}) is of similar nature.
+During spilling (\cref{enum:spill} from \cpageref{enum:spill}), one virtual register among all \gls{IG} nodes with significant degree has to be selected, which will afterwards become a potential spill.
+For this purpose, \texttt{selectSpillCandidate} gets called with the current \gls{IG} and the set of registers being spill candidates as arguments.
+Using Chaitin's or Bernstein's spilling heuristics~\cite{Brig92,BGM+89}, the method in its default implementation determines the virtual register with minimal spill costs and returns it.
+
+The spill code generation from \cref{enum:spillcode} on \cpageref{enum:spillcode} needs the information how many bytes a spilled register \texttt{r} occupies on the stack.
+This information is provided by method \texttt{getStackSize} from \cref{lst:ravirtmethods4}.
+By default, this method returns the register's bit width divided by 8.
+Again, this method can be overloaded if other implementations are required.
+
+At the very end of the register allocation algorithm, after \cref{enum:redspills} from \cpageref{enum:redspills}, virtual method \texttt{postRACleanup} can be overloaded for processor-specific final cleanups of the allocated \gls{WIR} code.
+By default, this method does nothing.
+In the derived allocators for the RISC-V and TriCore architectures, it detects and eliminates redundant move operations where source and target are the same register due to coalescing.
+Furthermore, any locks of parameters set using \texttt{setDontOptimize} (cf. \cref{lst:dontoptimize}) are reset.
+
+Finally, the \gls{WIR} register allocator provides dedicated places -- so-called hooks -- where processor-specific code can be added explicitly after particular steps of the overall algorithm from \cpageref{enum:build}.
+These hooks are virtual methods of class \texttt{WIR\_GraphColoring} that do absolutely nothing by default.
+They are listed below: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @void@ initializationHook@(@ WIR_Function æ&æf @)@;Ü\label{lst:rahook1}Ü
+virtual @void@ saveBestSolutionHook@( void )@;Ü\label{lst:rahook2}Ü
+virtual @void@ restoreBestSolutionHook@( void )@;Ü\label{lst:rahook3}Ü
+virtual @void@ rewriteProgramHook@(@ WIR_Function æ&æf @)@;Ü\label{lst:rahook4}Ü
+virtual @void@ postProcessingHook@(@ WIR_Function æ&æf @)@;Ü\label{lst:rahook5}Ü
+\end{lstlisting}
+\\
+The \texttt{initializationHook} (\cref{lst:rahook1}) is executed before creation of the \gls{IG} in \cref{enum:build} on \cpageref{enum:build}.
+If a processor-specific register allocator uses additional internal data structures, they can be initialized there.
+
+\texttt{saveBestSolutionHook} and \texttt{restoreBestSolutionHook} (\cref{lst:rahook2,lst:rahook3}) come into play when Bernstein's best-of-three spilling is activated using \texttt{setBestOfThreeSpilling} (cf. \cref{lst:wirgcfeatures} on \cpageref{lst:wirgcfeatures}).
+In this case, \crefrange{enum:build}{enum:select} are executed in a loop that applies all available spill heuristics and cost estimations to the current \gls{IG}.
+At the end of this loop, the allocation leading to overall minimal spill costs is kept and the allocation algorithm continues with \cref{enum:spillcode}.
+
+When iterating all spill heuristics in this way, the internal state of the allocation produced in the current iteration of this loop has to be saved if it leads to smaller costs compared to all previously iterated spill heuristics.
+At the end of the loop, the internal state of the allocator needs to be restored to that one producing overall minimal costs.
+While saving and restoring the allocator's internal state, these two hooks are called so that processor-dependent data structures can also be handled.
+
+Method \texttt{rewriteProgramHook} (\cref{lst:rahook4}) gets executed after \cref{enum:moves} from \cpageref{enum:moves}.
+Once one allocation round of the overall algorithm is done, this hook can be used to fine-tune the spill code created just before in a processor-specific manner.
+
+Finally, after the last \cref{enum:redspills} of the entire algorithm is done, the \texttt{postProcessingHook} (\cref{lst:rahook5}) can be used to tidy up the resulting \gls{WIR} code if needed.
+
+
+%-------------------------------------------------------------------------
+\section{Dead Code Elimination}
+\label{sec:optdceretarget}
+%-------------------------------------------------------------------------
+
+The \gls{WIR} dead code elimination does not require any specific adaptations for new processor architectures.
+The only thing that needs to be provided is a bit-true data flow analysis that has been retargeted to the new architecture according to \cref{sec:bitdflowretarget}.
+If this data flow analysis is available, the steps to set up the infrastructure for dead code elimination are rather straightforward:
+\begin{enumerate}
+  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/deadcode}.
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/deadcode/Makefile.src| \\
+  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/deadcode/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/deadcode/Ü{\itshape newModel}Üdeadcode.cc arch/Ü{\itshape archDir}Ü/optimizations/deadcode/Ü{\itshape newModel}Üdeadcode.h
+\end{lstlisting}
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/deadcode/{\itshape newModel}deadcode.h} according to the general structure depicted in \cref{lst:newprocdceheader}.
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/deadcode/{\itshape newModel}deadcode.cc} according to the general structure depicted in \cref{lst:newprocdceimpl}.
+\end{enumerate}
+
+As can be seen from \cref{lst:newprocdceheader,lst:newprocdceimpl}, the code structure for dead code elimination is minimal, and the constructors simply call the constructors of base classes \texttt{WIR\_DeadCode} and \texttt{WIR\_Optimization}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Dead Code Elimination},label=lst:newprocdceheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_DEADCODE_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_DEADCODE_H^
+
+// Include WIR headers
+^#include^ §<optimizations/deadcode/wirdeadcode.h>§
+
+namespace WIR {
+
+class WIR_CompilationUnit;
+class WIR_Function;
+class WIR_System;
+
+class Ü{\itshape newModel}Ü_DeadCode : public WIR_DeadCodeÜ\label{lst:newprocdceheader1}Ü
+{
+  public:
+
+    // Default constructor for system-level optimization.
+    explicit Ü{\itshape newModel}Ü_DeadCode@(@ WIR_System æ&æ @)@;Ü\label{lst:newprocdceheader2}Ü
+
+    // Default constructor for compilation unit-level optimization.
+    explicit Ü{\itshape newModel}Ü_DeadCode@(@ WIR_CompilationUnit æ&æ @)@;Ü\label{lst:newprocdceheader3}Ü
+
+    // Default constructor for function-level optimization.
+    explicit Ü{\itshape newModel}Ü_DeadCode@(@ WIR_Function æ&æ @)@;Ü\label{lst:newprocdceheader4}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_DeadCode@( void )@;Ü\label{lst:newprocdceheader5}Ü
+
+  protected:
+
+    virtual @void@ runOptimization@(@ WIR_Function æ&æ @)@ override;Ü\label{lst:newprocdceheader6}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+What is missing in \cref{lst:newprocdceimpl} is the implementation of the overridden method \texttt{runOptimization} from \cref{lst:newprocdceheader6} of \cref{lst:newprocdceheader}.
+The task of this method is to create an instance of the new processor's bit-true data flow analysis and to have it used during the actual dead code elimination.
+This boils down to the following few lines of code: \\
+\begin{lstlisting}[style=code,float=!ht]
+@void@ Ü{\itshape newModel}Ü_DeadCode::runOptimization@(@ WIR_Function æ&æf @)@
+{
+  Ü{\itshape newModel}Ü_BitDFA analyzer { f };
+  setDFA@(@ analyzer @)@;
+
+  WIR_DeadCode::runOptimization@(@ f @)@;
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Dead Code Elimination},label=lst:newprocdceimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/analyses/bit/Ü{\itshape\color{orange}newModel}Übitdfa.h>§
+
+// Include local headers
+^#include^ §"Ü{\itshape\color{orange}newModel}Üdeadcode.h"§
+
+namespace WIR {
+
+// Default constructor for system-level optimization.
+Ü{\itshape newModel}Ü_DeadCode::Ü{\itshape newModel}Ü_DeadCode@(@ WIR_System æ&æs @) :@Ü\label{lst:newprocdceimpl1}Ü
+  WIR_Optimization { s },
+  WIR_DeadCode { s }
+{};
+
+// Default constructor for compilation unit-level optimization.
+Ü{\itshape newModel}Ü_DeadCode::Ü{\itshape newModel}Ü_DeadCode@(@ WIR_CompilationUnit æ&æc @) :@Ü\label{lst:newprocdceimpl2}Ü
+  WIR_Optimization { c },
+  WIR_DeadCode { c }
+{};
+
+// Default constructor for function-level optimization.
+Ü{\itshape newModel}Ü_DeadCode::Ü{\itshape newModel}Ü_DeadCode@(@ WIR_Function æ&æf @) :@Ü\label{lst:newprocdceimpl3}Ü
+  WIR_Optimization { f },
+  WIR_DeadCode { f }
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_DeadCode::~Ü{\itshape newModel}Ü_DeadCode@( void )@Ü\label{lst:newprocdceimpl4}Ü
+{};
+
+}       // namespace WIR
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Constant Folding}
+\label{sec:optcfoldretarget}
+%-------------------------------------------------------------------------
+
+\gls{WIR} constant folding identifies operations that, under all circumstances, always produce the very same and constant values in registers.
+It also relies on the bit-true data flow analysis so that the basic steps to retarget constant folding to a new architecture are identical with \cref{sec:optdceretarget}.\footnote{Constant folding uses directory name \texttt{constfold}, file names \texttt{{\itshape newModel}constfold.h} and \texttt{{\itshape newModel}constfold.cc}, and class name \texttt{{\itshape newModel}\_ConstFold}.}
+
+In addition to that, the purely virtual method \texttt{doConstFolding} has to be provided so that the constant folding's header file needs to include: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ doConstFolding@(@ const WIR_Operation æ&æo,
+                             const ästd::mapäæ<æWIR_id_t, WIR_UpDownValueæ> &æoutValue,
+                             const ästd::mapäæ<æWIR_id_t, WIR_UpDownValueæ> &æinValue @)@ override;
+\end{lstlisting}
+\\
+This method receives an operation \texttt{o} that has already been identified as constant as first argument.
+Argument \texttt{outValue} is a map that provides the constant up/down values for each register parameter of \texttt{o} that is defined or def-used.
+The keys of this map are the unique IDs of each such parameter.
+Similarly, argument \texttt{inValue} provides the up/down values for all input parameters of \texttt{o}, i.e., which are used or def-used.
+
+The purpose of this method is to generate new operations that simply load the known constant values that \texttt{o} produces into the respective register.
+Depending on the size of the constant, this frequently is achieved with one single machine operation (e.g., \texttt{mov {\itshape <reg>}, {\itshape \#const}} for TriCore or \texttt{addi {\itshape <reg>}, x0, {\itshape const}} for RISC-V RV32I).
+For larger constants, two new operations might result from constant folding (e.g., \texttt{movh} and \texttt{addi} for TriCore or \texttt{lui} and \texttt{addi} for RISC-V).
+These newly created operations are not directly inserted into the \gls{WIR} code.
+Instead, method \texttt{doConstFolding} inserts them into map \texttt{mNewInstructions} by using operation \texttt{o} to be folded as key.
+
+Constant folding is performed repetitively until no more possible foldings are found.
+For this reason, \texttt{doConst\-Folding} needs to pay attention that operations that are actually created during folding are not folded once again.
+If \texttt{doConstFolding} has generated some new operations folding \texttt{o}, it returns \texttt{true}, and \texttt{false} otherwise.
+
+It is important that \texttt{doConstFolding} keeps the bit-true \gls{DFG} correct when it generates new operations.
+This means on the one hand that if more than one operation is created, the register parameter defined by the first one must get a \texttt{WIR\_BitValues} container (cf. \cpageref{sec:bitinfo}) attached that stores the outgoing \gls{DFG} edge from the first to the second operation togehther with its up/down value.
+Likewise, the register parameter used by the second new operation needs to obtain a container representing its incoming edge from the first operation with its up/down value.
+
+On the other hand, the fact the operation \texttt{o} gets replaced by the newly created operations also needs to be reflected in the \gls{DFG}.
+Thus, all register parameters receiving input from \texttt{o} along incoming \gls{DFG} edges must be updated such that these edges start at the parameter defined by the last new operation.
+
+If branch folding shall also be supported, the virtual method \texttt{doBranchFolding} needs to be overloaded as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ doBranchFolding@(@ const WIR_Operation æ&æo,
+                              const ästd::mapäæ<æWIR_id_t, WIR_UpDownValueæ> &æinValue @)@ override;
+\end{lstlisting}
+\\
+As before, an operation \texttt{o} and a map storing all incoming up/down values are provided as arguments.
+This method needs to check whether \texttt{o} is a conditional branch and if the incoming up/down values always lead to a satisfied branch condition or always to an unsatisfied condition.
+In the former case, the conditional branch can be replaced by an unconditional jump.
+In the latter case, no new operation needs to be generated and \texttt{o} can simply by erased since the branch never is taken.
+Again, \texttt{doBranchFolding} stores all newly created operations (or an empty list in the latter case above) in map \texttt{mNewInstructions} and returns whether a folding was done or not.
+
+Finally, the virtual method \texttt{doMOVFolding} can be provided if move folding shall be realized.
+The signature of this method is identical to \texttt{doBranchFolding} so that we omit its discussion here.
+Move folding checks whether operation \texttt{o} is an arithmetical operation that provably has no effect so that one of its used input registers is simply copied to its defined output register.
+Examples of such unnecessary arithmetical operations are additions/subtractions with 0, the bitwise and with 1, multiplications or divisions by 1, etc.
+\texttt{doMOVFolding} thus consists of a sequence of if-statements, each of them checking a certain code pattern (e.g., an \texttt{add} where one input operand is 0).
+Then, map \texttt{mNewInstructions} is again extended by a new entry replacing \texttt{o} by some register-register move operation.
+
+
+%-------------------------------------------------------------------------
+\section{Constant Propagation}
+\label{sec:optcpropretarget}
+%-------------------------------------------------------------------------
+
+The constant propagation pass of \gls{WIR} aims to replace operations that get constants in register parameters as input by operations using immediate parameters instead.
+Similar to constant folding from \cref{sec:optcfoldretarget}, this optimization makes use of the bit-true data flow analysis, and the steps to retarget constant propagation to a new architecture are the same as described in \cref{sec:optdceretarget}.\footnote{Constant propagation uses directory name \texttt{constprop}, file names \texttt{{\itshape newModel}constprop.h} and \texttt{{\itshape newModel}constprop.cc}, and class name \texttt{{\itshape newModel}\_ConstProp}.}
+
+A retargeted constant propagation has to override the purely virtual method \texttt{doConstProp} as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip]
+virtual @bool@ doConstProp@(@ const WIR_Operation æ&æo,
+                          const ästd::mapäæ<æWIR_id_t, WIR_UpDownValueæ> &æinValue @)@ override;
+\end{lstlisting}
+\\
+The meaning of this method's arguments and its return value is identical to that of methods \texttt{doBranchFolding} or \texttt{doMOVFolding} from \cref{sec:optcfoldretarget}.
+Inside this method, operations should be identified that use or def-use a register parameter for which map \texttt{inValue} contains a constant incoming up/down value.
+Such an operation should then be replaced by a variant where the identified constant shows up as immediate parameter instead of a register parameter.
+This transformation should consider the commutativity of many operations.
+For example, \texttt{add x8, x19, x9} as well as \texttt{add x8, x9, x19} should be replaced by \texttt{addi x8, x9, 42} if register \texttt{x19} is known to have the constant value 42.
+
+Thus, retargeting constant propagation relies on a careful analysis of a processor's \gls{ISA} and on the identification of pairs of operations once featuring register parameters and once using immediates.
+Based on this analysis' results, the realization of \texttt{doConstProp} is the straightforward implementation of all these identified operation pairs.
+In analogy to constant folding, care is required for the proper modelling of the bit-true data flow for an operation created during constant propagation.
+This means that all register and immediate parameters of a newly created operation must come with \texttt{WIR\_BitValue} containers, and they have to store the correct up/down values for all \gls{DFG} edges starting or ending in the new operation.
+
+
+%-------------------------------------------------------------------------
+\section{Redundant Code Elimination}
+\label{sec:optredundantcoderetarget}
+%-------------------------------------------------------------------------
+
+The last \gls{WIR} optimization based on the bit-true data flow analysis is redundant code elimination.
+For a defined register parameter \texttt{p1} and a used parameter \texttt{p2}, it checks whether the bit-true up/down values leaving \texttt{p1} are equal to the incoming up/down values for \texttt{p2}, and that the definition in \texttt{p1} always reaches the use in \texttt{p2}.
+If this is the case, \texttt{p2} gets replaced within its \gls{WIR} operation by \texttt{p1} (cf. \cref{sec:optredundantcode}).
+Once more, the actual steps to regartet this optimization pass are identical with those from \cref{sec:optcfoldretarget}.
+
+Most parts of this optimization are fully generic and processor-independent.
+However, there might be processor-specific situations where the replacement of some use \texttt{p2} by some definition \texttt{p1} has to be avoided.
+This can be realized by overriding the virtual method \texttt{areRedundant} as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+virtual @bool@ areRedundant@(@ const WIR_RegisterParameter æ&ædef, const WIR_UpDownValue æ&æoutValue,
+                           const WIR_RegisterParameter æ&æuse,
+                           const WIR_UpDownValue æ&æinValue @)@ const override;
+\end{lstlisting}
+\\
+This method gets the defined register parameter and its associated outgoing up/down value as first arguments, followed by the use and its incoming up/down value.
+Based on this information, \texttt{areRedundant} can check whether the replacement of \texttt{use} by \texttt{def} shall be performed or not by returning \texttt{true} and \texttt{false}, resp.
+
+Frequently, \texttt{areRedundant} suppresses the optimization when the considered register parameters are somehow involved in function calls.
+As already discussed earlier (cf. \cref{sssec:vregscalls}), the handling of registers during function calls is critical and requires the adherance of calling conventions.
+One typical situation that should not be optimized by redundant code elimination is when \texttt{def} is an implicit parameter of a function call operation.
+This means that \texttt{def} serves to pass the called function's return value to the callee.
+As such return value passing registers regularly are not callee-saved, the physical register associated with \texttt{def} could be overwritten by other function calls between \texttt{def} and \texttt{use}.
+In such a situation, \texttt{areRedundant} might return \texttt{false} in order to prevent the optimization.
+
+Another case could arise if \texttt{def} writes a register that, according to some calling convention, is used for argument passing during a function call.
+Here, the operation of \texttt{def} is providing a value to be passed to some callee.
+Again, such argument passing registers regularly are not callee-saved so that it cannot be guaranteed that the value of \texttt{def} really reaches \texttt{use}.
+Thus, the optimization might be prevented by \texttt{areRedundant} in this situation, too.
+
+Finally, the \gls{WIR} operation containing \texttt{use} might be of a specific operation format that prevents the application of redundant code elimination.
+As discussed earlier (cf. \cref{lst:tcopfreg} on \cpageref{lst:tcopfreg}), operation formats can be registered such that only specific physical registers are allowed as register parameters.
+If, e.g., the format of the operation featuring \texttt{use} mandates that \texttt{use} is the stack pointer, but if \texttt{def} refers some different register, then \texttt{areRedundant} should also return \texttt{false}.
+
+
+%-------------------------------------------------------------------------
+\section{Jump Correction}
+\label{sec:optjumpsretarget}
+%-------------------------------------------------------------------------
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Jump Correction},label=lst:newprocjcheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_JUMPCORRECTION_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_JUMPCORRECTION_H^
+
+// Include WIR headers
+^#include^ §<optimizations/jumpcorrection/wirjumpcorrection.h>§
+
+namespace WIR {
+
+class WIR_BasicBlock;
+class WIR_System;
+
+class Ü{\itshape newModel}Ü_JumpCorrection : public WIR_JumpCorrectionÜ\label{lst:newprocjcheader1}Ü
+{
+  public:
+
+    // Default constructor for system-level optimization.
+    explicit Ü{\itshape newModel}Ü_JumpCorrection@(@ WIR_System æ&æs @)@;Ü\label{lst:newprocjcheader2}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_JumpCorrection@( void )@;Ü\label{lst:newprocjcheader3}Ü
+
+    // Determine the costs in terms of byte size of a jump correction.
+    virtual @int@ getJumpCostsSize@(@ const WIR_BasicBlock æ&æs, const WIR_BasicBlock æ&æt,Ü\label{lst:newprocjcheader4}Ü
+                                  @bool@ addToSrc @)@ override;
+
+    // Determine the costs in terms of clock cycles of a jump correction.
+    virtual @int@ getJumpCostsCycles@(@ const WIR_BasicBlock æ&æs, const WIR_BasicBlock æ&æt,Ü\label{lst:newprocjcheader5}Ü
+                                    @bool@ addToSrc @)@ override;
+
+  protected:
+
+    virtual @void@ runOpt@(@ WIR_BasicBlock æ&æb @)@ override;Ü\label{lst:newprocjcheader6}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+Retargeting the \gls{WIR} jump correction to a new processor architecture can be quite laborious.
+The general steps, however, are very simple and similar to those already elaborated in the previous sections of this chapter:
+\begin{enumerate}
+  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection}.
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/jumpcorrection/Makefile.src| \\
+  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Jump Correction},label=lst:newprocjcimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<analyses/liveness/wirlivenessanalysis.h>§Ü\label{lst:newprocjcimpl1}Ü
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+// Include local headers
+^#include^ §"Ü{\itshape\color{orange}newModel}Üjumpcorrection.h"§
+
+namespace WIR {
+
+// Default constructor for system-level optimization.
+Ü{\itshape newModel}Ü_JumpCorrection::Ü{\itshape newModel}Ü_JumpCorrection@(@ WIR_System æ&æs @) :@Ü\label{lst:newprocjcimpl2}Ü
+  WIR_JumpCorrection { s }
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_JumpCorrection::~Ü{\itshape newModel}Ü_JumpCorrection@( void )@Ü\label{lst:newprocjcimpl3}Ü
+{};
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/jumpcorrection/Ü{\itshape newModel}Üjumpcorrection.cc arch/Ü{\itshape archDir}Ü/optimizations/jumpcorrection/Ü{\itshape newModel}Üjumpcorrection.h
+\end{lstlisting}
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection/{\itshape newModel}jumpcorrection.h} according to the general structure depicted in \cref{lst:newprocjcheader}.
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection/{\itshape newModel}jumpcorrection.cc} \linebreak according to the general structure depicted in \cref{lst:newprocjcimpl}.
+\end{enumerate}
+
+As can be seen from \cref{lst:newprocjcheader2} of \cref{lst:newprocjcheader}, jump correction features only one single constructor taking a whole \gls{WIR} system as argument.
+Applying the optimization only locally to, e.g., a single function, is not supported.
+This is because jump correction heavily uses the \gls{WIR} memory layout from \cref{sec:memlayout} that bases on the global, sytem-wide addresses of basic blocks, regions, and sections.
+
+The jump correction pass inspects all jumps inside the given \gls{WIR} system, determines the distance that the jump bridges from its source to its jump target, and modifies a jump operation if this jump distance is too large for the jump's actual operation format.
+Modifying a jump operation can have the effect that memory addresses of some subsequent basic blocks change, rendering other jumps invalid.
+For this reason, jump correction iterates over a system's jumps until no more corrections were applied.
+
+Such invalid jumps occur especially in the context of optimizations that allocate \gls{WIR} code to different memory regions that are far apart from each other in a processor's address space~\cite{OLF16}.
+Invalid jumps that are not able to bridge the large distance between such memory regions need to be replaced by long jumps during jump correction.
+Such memory allocating optimizations might wish to take the overheads due to jump correction into account.
+This is supported by methods \texttt{getJumpCostsSize} and \texttt{getJumpCostsCycles} from \cref{lst:newprocjcheader4,lst:newprocjcheader5} of \cref{lst:newprocjcheader}.
+
+Both of them are purely virtual in base class \texttt{WIR\_JumpCorrection} and thus must be overridden in derived classes.
+They both receive references to the basic blocks \texttt{s} and \texttt{t} as first arguments, which represent source and target of some jump.
+\texttt{getJumpCostsSize} returns the byte size of the code required for a long jump from \texttt{s} to \texttt{t}, while \texttt{getJumpCostsCyles} returns the number of clock cycles typically required for such a long jump.
+Depending on the Boolean flag \texttt{addToSrc}, both methods return the costs of a long jump attributed either to the jump's start or target basic block.
+
+The main work of jump correction is done by method \texttt{runOpt} (cf. \cref{lst:newprocjcheader6} in \cref{lst:newprocjcheader}) that has to be overridden, too.
+This method gets a reference to a basic block \texttt{b} as only argument and determines whether its last operation is a jump requiring correction.
+For this purpose, this method should distinguish between all the different scenarios of a jump (e.g., conditional jump, unconditional jump, function call, return, implicit jump) and call appropriate methods to handle these scenarios.
+Thus, it is very common to add dedicated methods to a retargeted jump correction class as follows: \\
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+private:
+
+  // Correct an invalid unconditional jump.
+  @unsigned int@ adjustUnconditionalJump@(@ WIR_Operation æ&æo @)@;
+
+  // Correct an invalid implicit jump.
+  @unsigned int@ adjustImplicitJump@(@ WIR_Operation æ&æo @)@;
+
+  // Correct an invalid conditional jump.
+  @unsigned int@ adjustConditionalJump@(@ WIR_Operation æ&æo @)@;
+\end{lstlisting}
+\\
+All these methods are called with a jump operation that potentially is invalid.
+They return the number of effectively corrected operations, i.e., 0 if a jump did not need to be corrected.
+The implementation of these methods heavily depends on the underlying processor architecture -- a processor's \gls{ISA} on the one hand defines which branch distances can be bridged by different branch operations and which distances thus result in an invalid branch.
+On the other hand, the code patterns required to replace an invalid jump by a long jump are obviously also architecture-dependent.
+For these reasons, no general rules can be given here how the above methods need to be realized.
+However, a few typical cases can be exemplified in the following.
+
+\begin{enumerate}
+  \item \emph{Correction of unconditional jumps:}
+    \begin{enumerate}
+      \item \emph{Replacing an unconditional jump with reduced bit width by a regular-width jump:}\label{enum:ucondwidth} \glspl{ISA} with operations of reduced bit width (e.g., 16-bits wide RISC-V RV32IC operations) feature branches that support only a very short distance.
+      Such a branch could be corrected by simply replacing it by a regular branch with native bit width (e.g., a 32-bits wide RV32I branch operation).
+
+      \item \emph{Replacing an unconditional jump by a long indirect jump:} Here, the address of the branch target is loaded into a register using the target block's symbol.
+      Hereafter, an indirect branch to this pre-computed pointer is generated, replacing the original invalid jump.
+
+      \item \emph{Erasing the unconditional jump:} If it turns out that the target of an unconditional jump is the basic block is the direct successor of the branching block (which can happen in the context of memory allocation optimizations), the unconditional jump is not required and can simply be eliminated.
+    \end{enumerate}
+
+  \item \emph{Correction of implicit jumps:}
+    \begin{enumerate}
+      \item \emph{Source basic block coming with no branch:}\label{enum:implnobranch} An implicit jump occurs if the source basic block \texttt{s} does not contain any jump operation at its end.
+      Then, the program's execution continues with the very next basic block \texttt{t} that follows \texttt{s} in memory.
+      If some optimization moves target block \texttt{t} away from \texttt{s}, an explicit unconditional jump to \texttt{t} must be added to the tail of \texttt{s}.
+
+      \item \emph{Source block ending with function call:}\label{enum:implcall} A call operation at the end of source block \texttt{s} always comes with an implicit jump. This is because the program's execution continues with the direct successor \texttt{t} of \texttt{s} in memory once the called function returns.
+      If \texttt{t} gets allocated elsewhere in memory, correcting the invalid call requires adding a so-called trampoline.
+      This trampoline is a new basic block immediately after \texttt{s} holding only the long jump to \texttt{t}.
+    \end{enumerate}
+
+  \item \emph{Correction of conditional jumps:} Correcting conditional jumps is the most complicated case, since such jumps regularly have two targets -- either the target explicitly given in the jump that is executed when the branch is taken, or the implicit target being the next operation in memory whenever the branch is not taken.
+    \begin{enumerate}
+      \item \emph{Same explicit and implicit jump targets:} In such situations, the branch can simply be eliminated.
+
+      \item \emph{Moved implicit jump target:}\label{enum:condimpl} If the basic block being a jump's implicit target is allocated elsewhere in memory, the invalid conditional jump has to be corrected by adding a trampoline to this target block immediately after the jump, in analogy to \cref{enum:implcall}) above.
+
+      \item \emph{Replacing a conditional jump with reduced bit width by a regular-width jump:} If the explicit target of a conditional jump is out of reach, an attempt for correction could be to replace the jump by a regular jump with full bit width in analogy to \cref{enum:ucondwidth}) above.
+
+      \item \emph{Conditionally reached trampoline:} If the previous case does not work out, an invalid conditional jump to its explicit target has to be corrected by generating a trampoline.
+      In contrast to \cref{enum:implcall,enum:condimpl}), the challenge here is to find a good position within the \gls{CFG} where to place this trampoline so that it is reached only from the conditional branch to be corrected.
+
+      Ideally, some unconditional jump or a function return can be found that is within reach for the conditional jump to be corrected.
+      In this case, the trampoline can be placed immediately after such an unconditional jump or return, keeping the control flow inherently intact.
+      The original conditional jump then simply needs to be updated to explicitly branch to the trampoline.
+
+      If such an ideal position does not exist, the trampoline is placed directly after the invalid conditional jump, before its original implicit successor.
+      In order to keep the control flow correct, the condition of the jump to be corrected needs to be inverted, and the basic block originally being implicit successor becomes the corrected jump's explicit target.
+    \end{enumerate}
+\end{enumerate}
+
+Depending on the nature of the code required to realize a long jump in a given \gls{ISA}, it is very likely that some free register is required that is used to compute the pointer of the long jump's target.
+If jump correction is applied before register allocation, a fresh virtual register can simply be created and used.
+Otherwise, jump correction needs to apply a liveness analysis to determine whether there is some free physical register.
+If this is the case, the long jump's code can be generated in a straightforward fashion using this physical register.
+
+Otherwise, a currently occupied physical register needs to be chosen for the long jump.
+This physical register first needs to be spill-stored onto the stack.
+After that, it can be used by the operations of the long jump.
+And finally, the original contents of the physical register needs to be restored via a spill-load.
+Since this spill-load usually comes after the long jump, care needs to be taken when determining the position in the \gls{CFG} where to put this spill-load.
+Obviously, the creation of spill code during jump correction involves allocating some more space in the current \gls{WIR} function's stack frame, plus the potential adjustment of stack offsets (cf. \cref{sssec:stackmgmt}).
+
+
+%-------------------------------------------------------------------------
+\section{Operation Bit Width Reduction}
+\label{sec:optopwidthretarget}
+%-------------------------------------------------------------------------
+
+The optimization reducing the bit widths of operations for mixed-width \glspl{ISA} is rather straightforward to retarget to a new processor architecture.
+As usual, some boilerplate code needs to be set up, as described in the following steps:
+\begin{enumerate}
+  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/operationbitwidths}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Operation Bit Width Reduction},label=lst:newprocobwheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_OPERATIONBITWIDTHS_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_OPERATIONBITWIDTHS_H^
+
+// Include WIR headers
+^#include^ §<optimizations/operationbitwidths/wiroperationbitwidths.h>§
+
+namespace WIR {
+
+class WIR_CompilationUnit;
+class WIR_Function;
+class WIR_Instruction;
+class WIR_Operation;
+class WIR_System;
+
+class Ü{\itshape newModel}Ü_OperationBitWidths : public WIR_OperationBitWidthsÜ\label{lst:newprocobwheader1}Ü
+{
+  public:
+
+    // Default constructor for system-level optimization.
+    explicit Ü{\itshape newModel}Ü_OperationBitWidths@(@ WIR_System æ&æs @)@;Ü\label{lst:newprocobwheader2}Ü
+
+    // Default constructor for compilation unit-level optimization.
+    explicit Ü{\itshape newModel}Ü_OperationBitWidths@(@ WIR_CompilationUnit æ&æc @)@;Ü\label{lst:newprocobwheader3}Ü
+
+    // Default constructor for function-level optimization.
+    explicit Ü{\itshape newModel}Ü_OperationBitWidths@(@ WIR_Function æ&æf @)@;Ü\label{lst:newprocobwheader4}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_OperationBitWidths@( void )@;Ü\label{lst:newprocobwheader5}Ü
+
+  protected:
+
+    // Reduce bit widths of a given operation.
+    virtual ästd::listäæ<æ
+              ästd::reference_wrapperäæ<æ
+                WIR_Operationæ>>::æiterator reduce@(@ WIR_Instruction æ&æi,Ü\label{lst:newprocobwheader6}Ü
+                                                  ästd::listäæ<æä
+                                                    std::reference_wrapperäæ<æ
+                                                      WIR_Operationæ>>::æconst_iterator pos @)@ const override;
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/operationbitwidths/Makefile.src| \\
+  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Operation Bit Width Reduction},label=lst:newprocobwimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§
+
+// Include local headers
+^#include^ §"Ü{\itshape\color{orange}newModel}Üoperationbitwidths.h"§
+
+namespace WIR {
+
+// Default constructor for system-level optimization.
+Ü{\itshape newModel}Ü_OperationBitWidths::Ü{\itshape newModel}Ü_OperationBitWidths@(@ WIR_System æ&æs @) :@Ü\label{lst:newprocobwimpl1}Ü
+  WIR_OperationBitWidths { s }
+{};
+
+// Default constructor for compilation unit-level optimization.
+Ü{\itshape newModel}Ü_OperationBitWidths::Ü{\itshape newModel}Ü_OperationBitWidths@(@ WIR_CompilationUnit æ&æc @) :@Ü\label{lst:newprocobwimpl2}Ü
+  WIR_OperationBitWidths { c }
+{};
+
+// Default constructor for function-level optimization.
+Ü{\itshape newModel}Ü_OperationBitWidths::Ü{\itshape newModel}Ü_OperationBitWidths@(@ WIR_Function æ&æf @) :@Ü\label{lst:newprocobwimpl3}Ü
+  WIR_OperationBitWidths { f }
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_OperationBitWidths::~Ü{\itshape newModel}Ü_OperationBitWidths@( void )@Ü\label{lst:newprocobwimpl4}Ü
+{};
+
+}       // namespace WIR
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/operationbitwidths/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/operationbitwidths/Ü{\itshape newModel}Üoperationbitwidths.cc arch/Ü{\itshape archDir}Ü/optimizations/operationbitwidths/Ü{\itshape newModel}Üoperationbitwidths.h
+\end{lstlisting}
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/operationbitwidths/{\itshape newModel}operationbit-\linebreak widths.h} according to the general structure depicted in \cref{lst:newprocobwheader}.
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/operationbitwidths/{\itshape newModel}operationbit-\linebreak widths.cc} according to the general structure depicted in \cref{lst:newprocobwimpl}.
+\end{enumerate}
+
+The actual task of reducing an operation's bit width is performed by method \texttt{reduce} from \cref{lst:newprocobwheader6} of \cref{lst:newprocobwheader}.
+The operation to be examined and reduced is given by a reference to its enclosing \gls{WIR} instruction \texttt{i} first, followed by an iterator position \texttt{pos} that refers to the position of the operation within \texttt{i}'s list of operations.
+If \texttt{reduce} is able to replace this operation by another one with smaller bit width, it returns an iterator to the newly created operation within \texttt{i}.
+Otherwise, it returns the \texttt{end()} iterator.
+
+The implementation of \texttt{reduce} requires a careful analysis of an architecture's \gls{ISA}.
+This analysis should identify pairs of regular operations with full bit width and functionally equivalent operations of reduced width.
+\texttt{reduce} can then be implemented as a sequence of if-statements that match the given operation with the identified patterns of regular operations.
+If such an operation pattern has been found, the operation gets replaced by an according operation of reduced width.
+
+
+%-------------------------------------------------------------------------
+\section{Predicated Execution}
+\label{sec:optpredexretarget}
+%-------------------------------------------------------------------------
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Predicated Execution Pass},label=lst:newprocpredheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_PREDICATEDEXECUTION_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_PREDICATEDEXECUTION_H^
+
+// Include WIR headers
+^#include^ §<optimizations/generic/wiroptimization.h>§
+
+namespace WIR {
+
+class WIR_CompilationUnit;
+class WIR_Function;
+class WIR_System;
+
+class Ü{\itshape newModel}Ü_PredicatedExecution : public WIR_Optimization
+{
+  public:
+
+    // Default constructor for system-level optimization.
+    explicit Ü{\itshape newModel}Ü_PredicatedExecution@(@ WIR_System æ&æs @)@;Ü\label{lst:newprocpredheader1}Ü
+
+    // Default constructor for compilation unit-level optimization.
+    explicit Ü{\itshape newModel}Ü_PredicatedExecution@(@ WIR_CompilationUnit æ&æc @)@;Ü\label{lst:newprocpredheader2}Ü
+
+    // Default constructor for function-level optimization.
+    explicit Ü{\itshape newModel}Ü_PredicatedExecution@(@ WIR_Function æ&æf @)@;Ü\label{lst:newprocpredheader3}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_PredicatedExecution@( void )@;Ü\label{lst:newprocpredheader4}Ü
+
+  protected:
+
+    // Apply predicated execution to a given function.
+    virtual @void@ runOptimization@(@ WIR_Function æ&æf @)@ override;
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+Exploiting predicated execution in some \gls{WIR} optimization pass is a highly processor-specific task for which no general guidelines or algorithmical approaches exist.
+Modern \glspl{ISA} can provide fundamentally different styles of predication, rendering a generic optimization within \gls{WIR} difficult.
+For this reason, there exists no dedicated infrastructure for predicated execution within \gls{WIR}.
+An optimization pass thus simply inherits from the generic base class \texttt{WIR\_Optimization}, overrides the desired constructors, and provides a virtual destructur as well as a dedicated \texttt{runOptimization} method (cf. \cref{lst:newprocpredheader}).
+\texttt{runOptimization} then detects processor-specific code patterns and replaces them by predicated execution code.
+
+For the sake of brevity, we omit the discussion of the generic steps to set up the infrastructure for predicated execution within \gls{WIR} -- they are identical to those from \cref{sec:optdceretarget}.\footnote{Predicated execution uses directory name \texttt{predicatedexecution}, file names \texttt{{\itshape newModel}predicatedexecution.h} and \texttt{{\itshape newModel}\-predicatedexecution.cc}, and class name \texttt{{\itshape newModel}\_PredicatedExecution}.}
+
+
+%-------------------------------------------------------------------------
+\section{Peephole Optimization}
+\label{sec:optpeepretarget}
+%-------------------------------------------------------------------------
+
+Retargeting a peephole optimizer to a new processor architecture is a quite simple procedure.
+The required basic steps to set up its infrastructure are omitted here for the sake of brevity, see \cref{sec:optdceretarget} again.
+The new optimizer inherits from base class \texttt{WIR\_Peephole} as shown in \cref{lst:newprocpeepheader}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Peephole Optimization},label=lst:newprocpeepheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_PEEPHOLE_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_PEEPHOLE_H^
+
+// Include WIR headers
+^#include^ §<optimizations/peephole/wirpeephole.h>§
+
+namespace WIR {
+
+class WIR_Function;
+
+class Ü{\itshape newModel}Ü_Peephole : public WIR_Peephole
+{
+  public:
+
+    // Default constructor for function-level optimization.
+    explicit Ü{\itshape newModel}Ü_Peephole@(@ WIR_Function æ&æf @)@;Ü\label{lst:newprocpeepheader1}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_Peephole@( void )@;Ü\label{lst:newprocpeepheader2}Ü
+
+  protected:
+
+    // Determine whether the given peephole is suitable for optimization.
+    virtual @bool@ matchPeephole@(@ const WIR_Peephole::peephole æ&æp @)@ override;Ü\label{lst:newprocpeepheader3}Ü
+
+    // Optimize the current peephole.
+    virtual @void@ transformPeephole@(@ const WIR_Peephole::peephole æ&æp @)@ override;Ü\label{lst:newprocpeepheader4}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+The implementation of the constructor from \cref{lst:newprocpeepheader1} has to set the basic properties of the peepholes to be formed.
+This most importantly includes the specification of the peephole's size(s) by calling method \texttt{addPeepholeSize} from \cref{lst:wiroptpeep4} of \cref{lst:wiroptpeep}.
+The \gls{WIR} peephole optimizer supports peepholes with different sizes so that \texttt{addPeepholeSize} can be called several times by the constructor.
+Furthermore, the new optimizer's constructor can specify whether the formed peepholes shall span over several \gls{WIR} basic blocks or not by calling method \texttt{setCrossBasicBlocks} from \cref{lst:wiroptpeep6} of \cref{lst:wiroptpeep}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Local Instruction Scheduler},label=lst:newprocschedheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_LOCALSCHEDULING_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_LOCALSCHEDULING_H^
+
+// Include WIR headers
+^#include^ §<optimizations/scheduling/wirlocalscheduling.h>§
+
+namespace WIR {
+
+class WIR_BasicBlock;
+class WIR_BlockSchedulingRegion;
+class WIR_CompilationUnit;
+class WIR_Function;
+class WIR_SchedulingPriority;
+class WIR_System;
+
+class Ü{\itshape newModel}Ü_LocalScheduling : public WIR_LocalSchedulingÜ\label{lst:newprocschedheader1}Ü
+{
+  public:
+
+    // Default constructor for system-level optimization.
+    Ü{\itshape newModel}Ü_LocalScheduling@(@ WIR_System æ&æs, const WIR_SchedulingPriority æ&æp, @bool@ v æ=æ false,                                           @bool@ t æ=æ false @)@;Ü\label{lst:newprocschedheader2}Ü
+
+    // Default constructor for compilation unit-level optimization.
+    Ü{\itshape newModel}Ü_LocalScheduling@(@ WIR_CompilationUnit æ&æc, const WIR_SchedulingPriority æ&æp, @bool@ v æ=æ false,                                  @bool@ t æ=æ false @)@;Ü\label{lst:newprocschedheader3}Ü
+
+    // Default constructor for function-level optimization.
+    Ü{\itshape newModel}Ü_LocalScheduling@(@ WIR_Function æ&æf, const WIR_SchedulingPriority æ&æp, @bool@ v æ=æ false,                                         @bool@ t æ=æ false @)@;Ü\label{lst:newprocschedheader4}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_LocalScheduling@( void )@;Ü\label{lst:newprocschedheader5}Ü
+
+  protected:
+
+    // Generate a new processor-specific block region for scheduling.
+    virtual WIR_BlockSchedulingRegion æ*ægenerateBlockRegion@(@ WIR_BasicBlock æ&æb @)@ const override;Ü\label{lst:newprocschedheader6}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+Detecting specific code pattern(s) in a given peephole is done by method \texttt{matchPeephole} (cf. \cref{lst:newprocpeepheader3}).
+As discussed in \cref{sec:optpeep}, a sliding window is moved over the \gls{WIR} instructions inside basic blocks.
+Thus, the instructions within a peephole are represented by iterators referring to their positions within their enclosing basic blocks.
+A \texttt{std::vector} of such iterators thus represents a peephole, and a reference to such a peephole is handed over to \texttt{matchPeephole}.
+It then inspects the peephole's instructions and operations, checks whether they match some particular code pattern, and returns whether a pattern was identified successfully or not.
+
+In the former case, method \texttt{transformPeephole} (cf. \cref{lst:newprocpeepheader4}) is invoked next.
+It gets a successfully matched peephole as argument and optimizes it by transforming the peephole's code locally.
+
+
+%-------------------------------------------------------------------------
+\section{Local Instruction Scheduling}
+\label{sec:optschedretarget}
+%-------------------------------------------------------------------------
+
+Retargeting the local instruction scheduler of \gls{WIR} requires to specialize various abstract base classes, i.e., \texttt{WIR\_LocalScheduling}, \texttt{WIR\_BlockSchedulingRegion} and a couple of scheduling priorities.
+For this purpose, the following steps need to be done:
+\begin{enumerate}
+  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling}.
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/scheduling/Makefile.src| \\
+  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/Makefile.src} as follows: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.h
+\end{lstlisting}
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}localscheduling.h} following the general structure depicted in \cref{lst:newprocschedheader}.
+
+\end{enumerate}
+
+The constructors from lines \crefrange{lst:newprocschedheader2}{lst:newprocschedheader4} are straightforward, as they only need to delegate their arguments to the constructors of base class \texttt{WIR\_LocalScheduling} from \cref{lst:wiroptsched}.
+\texttt{generateBlockRegion} (cf. \cref{lst:newprocschedheader6} of \cref{lst:newprocschedheader}) creates a new scheduling region for a given basic block \texttt{b} and builds its dependence graph: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+WIR_BlockSchedulingRegion æ*æÜ{\itshape newModel}Ü_LocalScheduling::generateBlockRegion@(@ WIR_BasicBlock æ&æb @)@ const
+{
+  auto æ*æres = new Ü{\itshape newModel}Ü_BlockSchedulingRegion@(@ b, mVerbosity, mKeepTmpFiles @)@;
+  res->buildDG@()@;
+
+  return@(@ res @)@;
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!ht,caption={Header File for a New Processor Model's Block Scheduling Region},label=lst:newblockregionheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_BLOCKSCHEDULINGREGION_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_BLOCKSCHEDULINGREGION_H^
+
+// Include standard headers
+^#include^ §<list>§
+
+// Include WIR headers
+^#include^ §<optimizations/scheduling/wirblockschedulingregion.h>§
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü_BlockSchedulingRegion : public WIR_BlockSchedulingRegionÜ\label{lst:newblockregionheader1}Ü
+{
+  public:
+
+    // Default constructor.
+    Ü{\itshape newModel}Ü_BlockSchedulingRegion@(@ WIR_BasicBlock æ&æb, @bool@ v æ=æ false, @bool@ t æ=æ false @)@;Ü\label{lst:newblockregionheader2}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_BlockSchedulingRegion@( void )@;Ü\label{lst:newblockregionheader3}Ü
+
+    // Move a bundle of operations after a given instruction in the scheduling region.
+    virtual WIR_Instruction æ*æmoveOperations@(@ ästd::listäæ<æWIR_Operation æ*> &æb,                                                                            const WIR_Instruction æ*æpred æ)æ override;Ü\label{lst:newblockregionheader4}Ü
+
+    // Perform processor-specific actions after scheduling of a block region.
+    virtual @void@ postProcessingHook@( void )@ override;Ü\label{lst:newblockregionheader5}Ü
+
+  protected:
+
+    // Check for a processor-specific uncertain dependence between an operation and a register parameter.
+    virtual @bool@ checkUCert@(@ const WIR_Operation æ&æo, const WIR_RegisterParameter æ&ærp @)@ const override;Ü\label{lst:newblockregionheader6}Ü
+
+    // Check for a processor-specific control dependence between an operation and a register parameter.
+    virtual @bool@ checkCtrl@(@ const WIR_Operation æ&æo, const WIR_RegisterParameter æ&ærp @)@ const override;Ü\label{lst:newblockregionheader7}Ü
+
+    // Get the processor-specific latency between two dependent operations.
+    virtual @long long@ computeLatency@(@ const WIR_Operation æ&æo1, const WIR_Operation æ&æo2,                                                         WIR_DGEdgeType t @)@ override;Ü\label{lst:newblockregionheader8}Ü
+
+    // Get the number of clock cycles between issuing an operation until availability of its results.
+    virtual @long long@ getLatency@(@ const WIR_Operation æ&æo @)@ override;Ü\label{lst:newblockregionheader9}Ü
+
+    // Get an operation's earliest execution cycle if it were scheduled as first operation in the region.
+    virtual @long long@ getStartCycle@(@ const WIR_Operation æ&æo @)@ const override;Ü\label{lst:newblockregionheader10}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+\begin{enumerate}[resume]
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}blockschedulingregion.h} according to the general structure shown in \cref{lst:newblockregionheader}.
+  Depending on a new architecture's timing properties, some virtual methods from \cref{lst:newblockregionheader} might need to be overridden, some others maybe not.
+\end{enumerate}
+
+Method \texttt{moveOperations} (cf. \cref{lst:newblockregionheader4}) receives a bundle \texttt{b} of operations, i.e., a list, as first argument.
+All operations within \texttt{b} are assumed to be scheduled in parallel, and they shall be moved after the instruction pointed to by \texttt{pred}.
+Thus, \texttt{moveOperations} creates a new \gls{WIR} instruction after \texttt{pred} and puts all operations of \texttt{b} therein.
+Processor-specific rules how such bundles can be scheduled need to be ensured by \texttt{moveOperations}.
+
+The \texttt{postProcessingHook} (\cref{lst:newblockregionheader5}) can perform processor-specific cleanups after a block region has been scheduled.
+If, e.g., a silicon bug optimizer introduces \texttt{NOP} operations (cf. \cref{sec:optpeep} on \cpageref{sec:optpeep}), they might become obsolete after local scheduling and should be removed by \texttt{postProcessingHook}.
+
+Methods \texttt{checkUCert} and \texttt{checkCtrl} (\cref{lst:newblockregionheader6,lst:newblockregionheader7}) need to be overridden in order to capture processor-specific uncertainties and control dependencies while creating the dependence graph for a scheduling region.
+Both methods get a reference to an operation \texttt{o} as first argument and a reference to some register parameter \texttt{rp} as second one, and they return \text{true} if there is a dependence between \texttt{o} and \texttt{rp}.
+
+\texttt{computeLatency} (\cref{lst:newblockregionheader8}) aims to determine the latency in clock cycles between two operations \texttt{o1} and \texttt{o2} that depend on each other.
+The actual type of dependence (e.g., \gls{RAW} or \gls{WAR}) is provided by enumeration type \texttt{WIR\_DGEdgeType} specified in file \texttt{WIR/optimizations/scheduling/wirdgedgeproperty.h}.
+To compute this latency, this method needs to take processor-specific pipeline behaviors such as stalls or parallel execution of operations into account.
+
+In contrast, method \texttt{getLatency} (\cref{lst:newblockregionheader9}) returns the processor-specific response time of an operation, i.e., the number of clock cycles it takes from issuing the operation until its results are available.
+The purpose of this method is to distinguish between, e.g., fast integer operations, slower integer multiplications or divisions, or costly floating-point operations.
+
+Method \texttt{getStartCycle} considers the special scenario that a given operation shall be scheduled as first operation inside a basic block.
+Then, potential dependencies between the last operations of preceding basic blocks need to be taken into account and possible stall cycles have to be determined.
+
+\begin{lstlisting}[style=code,float=t,caption={Header File for a New Processor Model's Maximum Delay Scheduling Priority},label=lst:newmaxdelayheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_MAXDELAYPRIORITY_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_MAXDELAYPRIORITY_H^
+
+// Include WIR headers
+^#include^ §<optimizations/scheduling/wirmaxdelaypriority.h>§
+
+namespace WIR {
+
+class Ü{\itshape newModel}Ü_MaxDelayPriority : public WIR_MaxDelayPriorityÜ\label{lst:newmaxdelayheader1}Ü
+{
+  public:
+
+    // Default constructor.
+    Ü{\itshape newModel}Ü_MaxDelayPriority@( void )@;Ü\label{lst:newmaxdelayheader2}Ü
+
+    // Copy constructor.
+    Ü{\itshape newModel}Ü_MaxDelayPriority@(@ const Ü{\itshape newModel}Ü_MaxDelayPriority æ&æp @)@;Ü\label{lst:newmaxdelayheader3}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_MaxDelayPriority@( void )@;Ü\label{lst:newmaxdelayheader4}Ü
+
+  protected:
+
+    // Compute the maximum delay priority for a given operation.
+    virtual ästd::pairäæ<æ@long long@,                                                                                                ästd::listäæ<æWIR_Operation æ*>>æ computePriority@(@ const WIR_Operation æ&æo,                                                                                   const WIR_Operation æ*æpred,                                                                                @long long@ c @)@ override;Ü\label{lst:newmaxdelayheader5}Ü
+
+    // Create a deep copy of a scheduling priority.
+    virtual WIR_SchedulingPriority æ*æclone@( void )@ const override;Ü\label{lst:newmaxdelayheader6}Ü
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+As discussed in \cref{sec:optsched}, processor-specific realizations of heuristics to determine scheduling priorities are required next.
+For the maximum delays priority, this involves:
+\begin{enumerate}[resume]
+    \item Create file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}maxdelaypriority.h} following the general structure shown in \cref{lst:newmaxdelayheader}.\label{enum:maxdelay}
+\end{enumerate}
+
+The constructors from \cref{lst:newmaxdelayheader2,lst:newmaxdelayheader3} are straightforward, they simply have to invoke the respective constructors of base class \texttt{WIR\_MaxDelayPriority}.
+In analogy to \cref{lst:newprocimpl15} of \cref{lst:newprocimpl}, the \texttt{clone} method simply needs to call the copy constructor of the new class: \\
+\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+WIR_SchedulingPriority æ*æÜ{\itshape newModel}Ü_MaxDelayPriority::clone@( void )@ const
+{
+  return@(@ new Ü{\itshape newModel}Ü_MaxDelayPriority@(@ æ*æthis @) )@;
+};
+\end{lstlisting}
+
+The implementation of method \texttt{computePriority} (\cref{lst:newmaxdelayheader5}) is the essential part of a scheduling priority.
+It receives a reference to a \gls{WIR} operation \texttt{o} as first argument, for which the scheduling priority shall be computed.
+The second argument \texttt{pred} points to another operation that has already been scheduled in the current execution cycle and that is predecessor of \texttt{o}.
+If no such preceding operation exists, \texttt{pred} can be the \texttt{nullptr}.
+Finally, argument \texttt{cycle} represents the current execution cycle to be considered.
+The result returned by \texttt{computePriority} is a tuple whose first element stores the determined scheduling priority for operation \texttt{o}.
+The tuple's second element is a list of operation pointers denoting all \gls{WIR} operations to be scheduled together with \texttt{o} in the current execution cycle.
+Regularly, a processor-specific implementation of \texttt{computePriority} starts with determining \texttt{o}'s initial priority using method \texttt{computePriority} of the scheduling priority's base class.
+Hereafter, processor-specific checks can be carried out to refine this initial priority.
+Such checks can take into account the particular type of \texttt{o}, on which hardware units it gets executed, how it interacts within a processor's pipeline with the preceding operation \texttt{pred}, etc.
+
+Depending on which internal data structures are required inside a new priority's class and method \texttt{computePrio\-rity}, the destructor from \cref{lst:newmaxdelayheader4} finally requires some specific implementation.
+
+\begin{enumerate}[resume]
+    \item Repeat \cref{enum:maxdelay} for the remaining scheduling priorities mobility and number of successors.
+\end{enumerate}
+
+\cleardoubleoddpage

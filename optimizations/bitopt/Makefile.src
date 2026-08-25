@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/bitopt/wirbitopt.cc optimizations/bitopt/wirbitopt.h

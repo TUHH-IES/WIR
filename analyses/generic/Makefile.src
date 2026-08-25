@@ -1,0 +1,7 @@
+libwir_la_SOURCES      += analyses/generic/safeint.h \
+                          analyses/generic/wiranalysis.cc analyses/generic/wiranalysis.h \
+                          analyses/generic/wirbitvector.h \
+                          analyses/generic/wirinterval.h \
+                          analyses/generic/wirintervalset.h \
+                          analyses/generic/wirmodulointervalset.h \
+                          analyses/generic/wirsaturatingint.h

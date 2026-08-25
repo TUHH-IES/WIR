@@ -1,0 +1,214 @@
+/*
+
+  This header file belongs to the
+
+    WCC Intermediate Representation (WIR) Framework
+
+  Permission to use this software is granted according to the license provided
+  with this software distribution, and according to the attribution section in
+  the README file found in the top-level directory of this distribution.
+
+  Copyright 2015 - 2026, Heiko Falk.
+
+*/
+
+/*!
+  @file wirwhilelooptreenode.h
+  @brief This file provides the basic properties of regular for- or while-do
+         loop tree nodes.
+
+  @author Heiko Falk <Heiko.Falk@tuhh.de>
+*/
+
+
+#ifndef _WIR_WHILELOOPTREENODE_H
+#define _WIR_WHILELOOPTREENODE_H
+
+
+//
+// Include section
+//
+
+// Include standard headers
+#include <fstream>
+
+// Include WIR headers
+#include <wir/wirtypes.h>
+#include <analyses/structuralcontrolflow/wircontroltreenode.h>
+
+
+//
+// Header section
+//
+
+namespace WIR {
+
+/*!
+  @brief Class WIR_WhileLoopTreeNode represents regular for- or while-do loop
+         regions of the %WIR control tree.
+
+  - Cyclic: Yes
+  - Number of Entries: 1
+  - Number of Exits: >= 1
+
+  C.f. S. S. Muchnick, Fig. 7.36, page 203.
+
+  @author Heiko Falk <Heiko.Falk@tuhh.de>
+*/
+class WIR_WhileLoopTreeNode : public WIR_ControlTreeNode
+{
+
+  public:
+
+    /*!
+      @brief Default constructor.
+
+      @param[in] n A const reference to a for/while loop's entry node.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    explicit WIR_WhileLoopTreeNode( const WIR_ControlTreeNode & );
+
+    /*!
+      @brief Destructor.
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    virtual ~WIR_WhileLoopTreeNode( void );
+
+
+    //
+    // Type handling.
+    //
+
+    /*!
+      @brief getType returns the type of a for/while loop region node.
+
+      @return WIR_CTNodeType::whileloop
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    virtual WIR_CTNodeType getType( void ) const override;
+
+    /*!
+      @brief isCyclic returns whether a for/while loop region is cyclic or not.
+
+      @return Always true.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    virtual bool isCyclic( void ) const override;
+
+
+    //
+    // Control Tree hierarchy.
+    //
+
+    /*!
+      @brief getEntry returns a for/while loop's unique entry child node.
+
+      @return A const reference to mEntry.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    virtual const WIR_ControlTreeNode &getEntry( void ) const override;
+
+
+    //
+    // Handling of nodes.
+    //
+
+    /*!
+      @brief getNodes returns the set of all stored nodes.
+
+      @return A const reference to the set mNodes.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    const WIR_ControlTreeNodeSet &getNodes( void ) const;
+
+
+  protected:
+
+    //
+    // Visualization.
+    //
+
+    /*!
+      @brief visualize dumps a for/while loop region node into a given DOT file.
+
+      @param[in,out] dotFile A reference to a DOT file opened for writing.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    virtual void visualize( std::fstream & ) const override;
+
+
+  private:
+
+    friend class WIR_StructuralAnalysis;
+
+    /*!
+      @brief No standard construction allowed, users must use the public
+             constructor above instead.
+    */
+    WIR_WhileLoopTreeNode( void ) = delete;
+
+
+    //
+    // Handling of nodes.
+    //
+
+    /*!
+      @brief insertNode adds a new node to a for/while loop region.
+
+      @param[in] n A reference to the control tree node to be inserted into a
+                   for/while loop region.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    void insertNode( WIR_ControlTreeNode & );
+
+    /*!
+      @brief insertEdge adds a new edge between two nodes to a for/while loop
+             region.
+
+      @param[in] s A reference to the control tree node being the edge's source.
+      @param[in] t A reference to the control tree node being the edge's
+                   target.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    void insertEdge( const WIR_ControlTreeNode &, const WIR_ControlTreeNode & );
+
+    /*!
+      @brief insertBackEdge adds a new back-edge between two nodes to a
+             for/while loop region.
+
+      @param[in] s A reference to the control tree node being the edge's source.
+      @param[in] t A reference to the control tree node being the edge's
+                   target.
+
+      @author Heiko Falk <Heiko.Falk@tuhh.de>
+    */
+    void insertBackEdge( const WIR_ControlTreeNode &,
+                         const WIR_ControlTreeNode & );
+
+
+    //
+    // Attributes.
+    //
+
+    //! mEntry refers to a for/while loop region's entry node.
+    const WIR_ControlTreeNode &mEntry;
+
+    //! mNodes holds wrapped references to all stored nodes.
+    WIR_ControlTreeNodeSet mNodes;
+
+    //! mEdges holds pairs of nodes denoting a for/while loop region's edges.
+    WIR_ControlTreeEdgeSet mEdges;
+
+};
+
+}       // namespace WIR
+
+#endif  // _WIR_WHILELOOPTREENODE_H

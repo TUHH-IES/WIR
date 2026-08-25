@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += analyses/domination/wirdominationanalysis.cc analyses/domination/wirdominationanalysis.h

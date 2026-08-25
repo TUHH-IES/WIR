@@ -1,0 +1,61 @@
+%=========================================================================
+\chapter{Prerequisites}
+\label{chap:prerequisites}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+This chapter describes the dependencies that are required to build and use \gls{WIR}.
+\cref{sec:mandatory} first discusses the mandatory dependencies that must always be satisfied, and \cref{sec:optional} summarizes optional prerequisites.
+
+
+%-------------------------------------------------------------------------
+\section{Mandatory Dependencies}
+\label{sec:mandatory}
+%-------------------------------------------------------------------------
+
+\gls{WIR} is currently known to work under all recent Linux distributions.
+Active development and testing of \gls{WIR} is carried out on Ubuntu systems, Ubuntu versions 22.04 LTS or younger fulfill all prerequisites out of the box.
+\gls{WIR} builds and works smoothly both for 32- and 64-bit Linux systems.
+Any other operating system like, e.g., Microsoft Windows, is currently completely unsupported.
+Even though the code base of \gls{WIR} consists of clean and host system-independent C++ code that might easily be ported to other platforms, porting the build system might require some effort.
+
+As host compilers, a recent installation of a C++ compiler with full support of the C++17 language standard is required.
+Currently, both the C++ compiler \texttt{g++} from the \gls{GCC}~\cite{gcc26} as well as \texttt{clang++} from the LLVM project~\cite{llvm26} are supported.
+
+The build process is entirely driven by Makefiles.
+For this reason, the existence of GNU \texttt{make}~\cite{gnumake26} is mandatory.
+Furthermore, the maintenance of all Makefiles as well as the configuration of a \gls{WIR} build is done using the GNU Build System~\cite{gnubuild26}.
+Due to this, proper installations of \texttt{autoconf}, \texttt{autoheader}, \texttt{automake} and \texttt{libtool} on the host system are required.
+
+All internal data structures used by \gls{WIR} build on the C++ Standard Library, also known as \gls{STL}.
+Of high relevance for \gls{WIR} are containers like, e.g., \texttt{std::list}, \texttt{std::map} or \texttt{std::set}, as well as algorithms to efficiently find or manipulate items in such containers.
+Also, the internal memory management of \gls{WIR} relies on this standard library due to the consequent use of \texttt{std::unique\_ptr}.
+
+The C++ Standard Library, however, does not come with efficient data structures and algorithms for graphs, which are especially critical for an \gls{IR} such as \gls{WIR}.
+For this reason, \gls{WIR} has a strong mandatory dependence on the Boost C++ Libraries~\cite{boost26}, especially on the \gls{BGL}.
+
+Finally, the Infineon TriCore hardware model of \gls{WIR} comes with an assembly parser, allowing to create operations directly from assembly code files.
+As usual, such a parser is realized using standard scanner and parser generators.
+Thus, the corresponding GNU tools \texttt{flex}~\cite{gnuflex26} and \texttt{bison}~\cite{gnubison26} are required by \gls{WIR}, too.
+
+
+%-------------------------------------------------------------------------
+\section{Optional Dependencies}
+\label{sec:optional}
+%-------------------------------------------------------------------------
+
+If the optional generation of browsable HTML reference documentation for all \gls{WIR} classes is configured (cf. \cref{sec:configure}), the documentation generator tool \texttt{doxygen}~\cite{doxygen26} is needed.
+
+\texttt{doxygen} not only generates readable text for all \gls{WIR} classes.
+In addition, it also produces graphs visualizing inheritance, use and include relationships.
+For this purpose, the graph visualization software \texttt{Graphviz}~\cite{graphviz26} and its \texttt{dot} language are furthermore required.
+The tool \texttt{xdot} is invoked by \gls{WIR} whenever internal graph data structures like, e.g., \glspl{CFG}, \glspl{DFG} or interference graphs shall be inspected.
+
+This present manual has been typeset using \LaTeX.
+Should it have to be re-generated from is source files, a full installation of \texttt{pdflatex} is required, including all standard packages (e.g., KOMA), the bibliography infrastructure \texttt{biblatex} and \texttt{biber}, as well as the glossary generator \texttt{makeglossaries}.
+
+\gls{WIR} comes with a collection of unit tests covering both the generic parts of \gls{WIR} as well as its \gls{ISA}-specific modules.
+For the target architectures currently modeled in \gls{WIR}, it is important to verify that an assembly dump of all \gls{WIR} operations of an \gls{ISA} is syntactically correct and well accepted by a subsequent assembler tool.
+Thus, these unit tests internally call assemblers for all relevant \glspl{ISA}, making, e.g., \texttt{arm-elf-as}, \texttt{riscv32-unknown-elf-as} or \texttt{tricore-as} additional, optional dependencies of \gls{WIR}.
+
+\cleardoubleoddpage

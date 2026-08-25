@@ -1,0 +1,320 @@
+%
+% Page layout
+%
+
+\textwidth17.5cm
+\textheight24.54cm
+\oddsidemargin-7mm
+\evensidemargin-7mm
+\headheight13.6pt
+\topmargin-10mm
+
+\KOMAoptions{parskip=half}
+
+\renewcommand\baselinestretch{1.2}
+\selectfont
+
+
+%
+% Customized standard commands for section/part names
+%
+
+\let\Oldsection\section
+\newcommand{\sectiontitle}{}
+\renewcommand{\section}[1]{\Oldsection{#1}\renewcommand{\sectiontitle}{\thesection.\enspace{#1}}}
+
+% \let\Oldchapter\chapter
+\newcommand{\chaptertitle}{}
+% \renewcommand{\chapter}[1]{\Oldchapter{#1}\renewcommand{\chaptertitle}{\thechapter.{#1}}}
+
+\let\Oldpart\part
+\newcommand{\parttitle}{}
+\renewcommand{\part}[1]{\renewcommand{\sectiontitle}{}\renewcommand{\chaptertitle}{}\Oldpart{#1}\renewcommand{\parttitle}{\thepart.\enspace{#1}}\cleardoubleoddpage}
+
+\renewcaptionname{english}{\abstractname}{\vspace{3cm}\raggedright Outline}
+
+
+%
+% Customize lists of contents, figures, tables and listings
+%
+
+\makeatletter
+\lst@AddToHook{Init}{\def\@currentcounter{lstnumber}}%
+\makeatother
+
+\Crefname{enumi}{Step}{Steps}
+
+
+%
+% Page style, headers and footers
+%
+
+\setcounter{secnumdepth}{\subsubsectionnumdepth}
+\setcounter{tocdepth}{\subsubsectionnumdepth}
+
+\clearpairofpagestyles
+
+\setkomafont{pageheadfoot}{\sffamily}
+\setkomafont{pagehead}{\sffamily}
+\setkomafont{pagination}{}
+
+\KOMAoptions{
+  headsepline = true,
+  footsepline = true,
+  plainheadsepline = true,
+  plainfootsepline = true,
+}
+
+\automark[chapter]{chapter}
+
+\ihead*{\Ifthispageodd{\headmark}{\parttitle}}
+\ohead*{\Ifthispageodd{\sectiontitle}{}}
+\ifoot*{\Ifthispageodd{\\[-3mm]WIR \WIRVERSION}{\\[-3mm]WCC Compiler Intermediate Representation}}
+\ofoot*{\\[-3mm]~\pagemark}
+
+
+%
+% Document paths
+%
+
+\graphicspath{{PIC/}}
+
+
+%
+% Glossaries
+%
+
+\makeglossaries
+
+
+%
+% Formatting of code listings
+%
+
+\definecolor{darkgreen}{rgb}{0.55,0.71,0.0}
+\definecolor{darkpurple}{HTML}{914f9b}
+\definecolor{purple}{HTML}{644a9b}
+\definecolor{cornflowerblue}{rgb}{0.39, 0.58, 0.93}
+
+\lstdefinelanguage{shell}
+{
+  morekeywords={analyses,arch,containers}
+}
+
+\lstdefinestyle{code}
+{
+  language=C++,
+  numbers=left,
+  showstringspaces=false,
+  showspaces=false,
+  showtabs=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  breaklines=true,
+  breakatwhitespace=true,
+  breakindent=10pt,
+  basicstyle=\ttfamily\footnotesize,
+  morekeywords={final,nullptr,override},
+  escapechar=Ü,
+  moredelim=[is][\bfseries\color{purple}]{ä}{ä},
+  moredelim=[is][\color{darkgreen}]{^}{^},
+  moredelim=[is][\color{orange}]{§}{§},
+  moredelim=[s][\color{red}]{"}{"},
+  moredelim=[is][\color{blue}]{@}{@},
+  moredelim=[is][\color{purple}]{æ}{æ},
+  morecomment=[l][\itshape\color{gray}]{//},
+  morecomment=[l][\itshape\color{gray}]{[...]}
+}
+
+\lstdefinestyle{commandline}
+{
+  language=shell,
+  numbers=left,
+  showstringspaces=false,
+  showspaces=false,
+  showtabs=false,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  breaklines=true,
+  breakatwhitespace=true,
+  breakindent=10pt,
+  basicstyle=\ttfamily\footnotesize,
+  escapechar=Ü,
+  moredelim=[is][\color{black}]{~~}{~~},
+  moredelim=[is][\bfseries\color{blue}]{|}{|},
+  moredelim=[is][\bfseries\color{green}]{§}{§},
+  moredelim=[is][\color{darkgreen}]{^}{^},
+  moredelim=[is][\bfseries\underbar]{@}{@},
+  moredelim=[is][\itshape]{<<}{>>},
+  morecomment=[l][\itshape\color{gray}]{\#},
+  morecomment=[l][\itshape\color{gray}]{[...]}
+}
+
+\let\origthelstnumber\thelstnumber
+\makeatletter
+\newcommand*\Suppressnumber{%
+  \lst@AddToHook{OnNewLine}{%
+    \let\thelstnumber\relax%
+     \advance\c@lstnumber-\@ne\relax%
+    }%
+}
+
+\newcommand*\Reactivatenumber[1]{%
+  \setcounter{lstnumber}{\numexpr#1-1\relax}
+  \lst@AddToHook{OnNewLine}{%
+   \let\thelstnumber\origthelstnumber%
+   \refstepcounter{lstnumber}
+  }%
+}
+\makeatother
+
+
+%
+% Formatting of directory listings
+%
+
+\definecolor{folderbg}{RGB}{124,166,198}
+\definecolor{folderborder}{RGB}{110,144,169}
+
+\newlength\Size
+\setlength\Size{4pt}
+
+\tikzset{%
+  folder/.pic={%
+    \filldraw [draw=folderborder, top color=folderbg!50, bottom color=folderbg] (-1.05*\Size,0.2\Size+5pt) rectangle ++(.75*\Size,-0.2\Size-5pt);
+    \filldraw [draw=folderborder, top color=folderbg!50, bottom color=folderbg] (-1.15*\Size,-\Size) rectangle (1.15*\Size,\Size);
+  },
+  file/.pic={%
+    \filldraw [draw=folderborder, top color=folderbg!5, bottom color=folderbg!10] (-\Size,.4*\Size+5pt) coordinate (a) |- (\Size,-1.2*\Size) coordinate (b) -- ++(0,1.6*\Size) coordinate (c) -- ++(-5pt,5pt) coordinate (d) -- cycle (d) |- (c) ;
+  },
+}
+
+\forestset{%
+  declare autowrapped toks={pic me}{},
+  declare boolean register={pic root},
+  pic root=0,
+  pic dir tree/.style={%
+    for tree={%
+      folder,
+      font=\footnotesize\ttfamily,
+      grow'=0,
+    },
+    before typesetting nodes={%
+      for tree={%
+        edge label+/.option={pic me},
+      },
+      if pic root={
+        tikz+={
+          \pic at ([xshift=\Size].west) {folder};
+        },
+        align={l}
+      }{},
+    },
+  },
+  pic me set/.code n args=2{%
+    \forestset{%
+      #1/.style={%
+        inner xsep=2\Size,
+        pic me={pic {#2}},
+      }
+    }
+  },
+  pic me set={directory}{folder},
+  pic me set={file}{file},
+}
+
+
+%
+% Formatting of theorems
+%
+
+\newtheoremstyle{break}
+  {1em}
+  {1em}
+  {\itshape}
+  {}%
+  {\bfseries}
+  {}%
+  {\newline}
+  {}%
+\theoremstyle{break}
+
+\newtheorem{definition}{Definition}[chapter]
+
+
+%
+% Custom commands
+%
+
+% verbatim input files
+\RecustomVerbatimCommand{\VerbatimInput}{VerbatimInput}%
+{%fontsize=\footnotesize,
+ %
+ %frame=lines,  % top and bottom rule only
+ framesep=2em, % separation between frame and text
+ %rulecolor=\color{gray},
+ %
+ %label=\fbox{\color{black}data.txt},
+ %labelposition=topline,
+ %
+ %commandchars=\|\(\), % escape character and argument delimiters for
+                      % commands within the verbatim
+ %commentchar=*        % comment character
+}
+
+% Colored text boxes
+\newtcolorbox{wirFutureWork}[1][]
+{
+  breakable,
+  enhanced,
+  colframe = yellow!25,
+  colback  = yellow!10,
+  coltitle = yellow!20!black,
+  title    = {\textbf{Future Work}},
+  #1,
+}
+
+\newtcolorbox{wirNote}[1][]
+{
+  breakable,
+  enhanced,
+  colframe = green!25,
+  colback  = green!10,
+  coltitle = green!20!black,
+  title    = {\textbf{Note}},
+  #1,
+}
+
+\newtcolorbox{wirWarn}[1][]
+{
+  breakable,
+  enhanced,
+  colframe = red!25,
+  colback  = red!10,
+  coltitle = red!20!black,
+  title    = {\textbf{Warning}},
+  #1,
+}
+
+\newtcolorbox{wirExample}[1][]
+{
+  breakable,
+  enhanced,
+  colframe = cornflowerblue!35,
+  colback  = cornflowerblue!20,
+  coltitle = cornflowerblue!30!black,
+  title    = {\textbf{Example}},
+  #1,
+}
+
+% TODO command
+\newcommand\TODO[1]{{\bfseries TODO: }{\itshape #1}\marginpar[\hfill{TODO}]{TODO}}
+
+
+%
+% Hyphenations
+%
+
+\hyphenation{graph-color-ing}

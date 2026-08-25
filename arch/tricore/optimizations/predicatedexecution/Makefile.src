@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/tricore/optimizations/predicatedexecution/tcpredicatedexecution.cc arch/tricore/optimizations/predicatedexecution/tcpredicatedexecution.h

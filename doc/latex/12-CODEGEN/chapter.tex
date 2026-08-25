@@ -1,0 +1,555 @@
+%=========================================================================
+\chapter{Code Generation}
+\label{chap:codegen}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+While all the previous chapters of this guide described how to construct, use and manipulate objects of the various classes forming the \gls{WIR} \gls{IR}, another central aspect of an \gls{IR} is to generate actual code from it for further processing by, e.g., assemblers or linkers.
+\cref{sec:streamio} thus puts a focus on the generic mechanisms of \gls{WIR} to emit its code in a processor-independent and easily comprehensible format.
+Manipulators that allow to increase or decrease the level of detail of such code output are presented in \cref{sec:streammanip}.
+\cref{sec:asmcode} discusses how to adapt this code output such that syntactically correct assembly output for the processor architectures presented in \crefrange{ssec:tcmodel}{ssec:armmodel} can be obtained.
+The \gls{WIR} system model features aspects of a global memory layout and allocation (cf. \cref{sec:memlayout}) which are taken up in \cref{sec:ldscripts} that describes the generation of tailored linker scripts for a given memory allocation.
+
+
+%-------------------------------------------------------------------------
+\section{Generic Stream Output}
+\label{sec:streamio}
+%-------------------------------------------------------------------------
+
+Generating code from a given \gls{WIR} structure is as easy as a \texttt{"Hello world"} exercise in C++.
+This is because all classes forming the \gls{WIR} software model (cf. \cref{chap:swmodel}) are equipped with \texttt{<{}<} stream operators that allow to dump the corresponding objects to an output stream in a highly flexible and configurable way.
+More precisely, these operators exist for the following classes: \texttt{WIR\_System}, \texttt{WIR\_CompilationUnit}, \texttt{WIR\_Function}, \texttt{WIR\_BasicBlock}, \texttt{WIR\_Instruction}, \texttt{WIR\_Operation}, \texttt{WIR\_Parameter} and all derived parameter classes, and \texttt{WIR\_Data}.
+They are all declared in analogy to \cref{lst:bbio} showing, e.g., the \gls{API} of class \texttt{WIR\_BasicBlock}.
+
+\begin{lstlisting}[style=code,float=h,caption={Generic Stream Output of Class \texttt{WIR\_BasicBlock}},label=lst:bbio]
+class WIR_BasicBlock
+{
+  public:
+
+    [...]
+
+    // Dump a basic block to an output stream.
+    friend ästd::ostreamä æ&æ operator æ<<æ @(@ ästd::ostreamä æ&æos, const WIR_BasicBlock æ&æb @)@;Ü\label{lst:bbio1}Ü
+};
+\end{lstlisting}
+
+An example program showing the use of such stream output and of various other concepts introduced in \cref{chap:swmodel,chap:hwmodel} is shown in \cref{lst:iotest}.
+This example makes use of the RV32IMC processor model from \cref{ssec:rv32model} (cf. \cref{lst:iotest2}).
+As already introduced in \cref{chap:build}, the \gls{WIR} library is initialized first in \cref{lst:iotest4}.
+Hereafter, an RV32IMC-based system is created (\cref{lst:iotest5}) and its (one and only) processor core is obtained in \cref{lst:iotest6}.
+\crefrange{lst:iotest7}{lst:iotest12} generate two compilation units containing one function each.
+In the first function \texttt{foo} of compilation unit \texttt{file1.s}, three RISC-V virtual registers are created (\crefrange{lst:iotest13}{lst:iotest15}) where two of them are precolored with the processor's physical registers \texttt{x0} and \texttt{x1}, resp. (\cref{lst:iotest16,lst:iotest17}).
+Next, one basic block containing one instruction is added to this function \texttt{foo} (\cref{lst:iotest18}), and this instruction contains two operations (\cref{lst:iotest19,lst:iotest22}).
+
+\begin{lstlisting}[style=code,float=!ht,caption={Simple WIR Program Showing Stream Output},label=lst:iotest]
+// Include WIR headers.
+^#include^ §<wir/wir.h>§Ü\label{lst:iotest1}Ü
+^#include^ §<arch/riscv/rv32imc.h>§Ü\label{lst:iotest2}Ü
+
+using namespace WIR;Ü\label{lst:iotest3}Ü
+
+@int@ main@( void )@
+{
+  // Initialize WIR.
+  WIR_Init@()@;Ü\label{lst:iotest4}Ü
+
+  // Create RISC-V WIR system and get the system's RV32IMC processor core.
+  WIR_System sys@(@ "rudolv.sys", WIR_TaskManager() @)@;Ü\label{lst:iotest5}Ü
+  auto æ&æp = sys.getComponentsæ<æRV32IMCæ>æ@()@.begin@()@æ->æget@()@;Ü\label{lst:iotest6}Ü
+
+  // Create two compilation units with one function each.
+  auto æ&æc1 = sys.pushBackCompilationUnit@(@ WIR_Function@(@ "foo" @) )@;Ü\label{lst:iotest7}Ü
+  c1.setName@(@ "file1.s" @)@;Ü\label{lst:iotest8}Ü
+  auto æ&æc2 = sys.pushBackCompilationUnit@(@ WIR_Function@(@ "bar" @) )@;Ü\label{lst:iotest9}Ü
+  c2.setName@(@ "file2.s" @)@;Ü\label{lst:iotest10}Ü
+
+  auto æ&æf1 = c1.getFunctions@()@.front@()@.get@()@;Ü\label{lst:iotest11}Ü
+  auto æ&æf2 = c2.getFunctions@()@.front@()@.get@()@;Ü\label{lst:iotest12}Ü
+
+  // Create various WIR objects in first compilation unit.
+  auto æ&ær1 = f1.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ RV32I::RegisterType::reg @) )@;Ü\label{lst:iotest13}Ü
+  auto æ&ær2 = f1.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ RV32I::RegisterType::reg @) )@;Ü\label{lst:iotest14}Ü
+  auto æ&ær3 = f1.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ RV32I::RegisterType::reg @) )@;Ü\label{lst:iotest15}Ü
+  f1.insertPrecolor@(@ r2, p.x0@() )@;Ü\label{lst:iotest16}Ü
+  f1.insertPrecolor@(@ r3, p.x1@() )@;Ü\label{lst:iotest17}Ü
+
+  f1.pushBackBasicBlock@(@ æ{æ WIR_Instruction@(@Ü\label{lst:iotest18}Ü
+    WIR_Operation@(@ RV32I::OpCode::ADDI, RV32I::OperationFormat::RRC12_1,Ü\label{lst:iotest19}Ü
+      WIR_RegisterParameter@(@ r1, WIR_Usage::def @)@, WIR_RegisterParameter@(@ r2, WIR_Usage::use @)@,Ü\label{lst:iotest20}Ü
+      RV_Const12_Signed@(@ §42§ @) )@,Ü\label{lst:iotest21}Ü
+    WIR_Operation@(@ RV32I::OpCode::JAL, RV32I::OperationFormat::RL_1,Ü\label{lst:iotest22}Ü
+      WIR_RegisterParameter@(@ r3, WIR_Usage::def @)@, WIR_LabelParameter@(@ f2 @) ) )@ æ}æ @)@;Ü\label{lst:iotest23}Ü
+
+  // Create various WIR objects in second compilation unit.
+  auto æ&ær4 = f2.pushBackVirtualRegister@(@ WIR_VirtualRegister@(@ RV32I::RegisterType::reg @) )@;Ü\label{lst:iotest24}Ü
+  auto æ&æd = c2.pushBackData@(@ æ{æ WIR_Data@(@ "dataObject" @)@ æ}æ @)@;Ü\label{lst:iotest25}Ü
+  d.setSize@(@ §4§ @)@;Ü\label{lst:iotest26}Ü
+  d.pushBackInitData@(@ WIR_DataInit@(@ WIR_DataInitType::iword, "4711" @) )@;Ü\label{lst:iotest27}Ü
+
+  f2.pushBackBasicBlock@(@Ü\label{lst:iotest28}Ü
+    æ{æ WIR_Instruction@(@ æ{æ RV32I::OpCode::LUI, RV32I::OperationFormat::RL_2,Ü\label{lst:iotest29}Ü
+        WIR_RegisterParameter@(@ r4, WIR_Usage::def @)@, WIR_LabelParameter@(@ d @)@ æ}æ @)@,Ü\label{lst:iotest30}Ü
+      WIR_Instruction@(@ æ{æ RV32I::OpCode::LW, RV32I::OperationFormat::RLR_1,Ü\label{lst:iotest31}Ü
+         WIR_RegisterParameter@(@ p.x10@()@, WIR_Usage::def @)@, WIR_LabelParameter@(@ d @)@,Ü\label{lst:iotest32}Ü
+         WIR_RegisterParameter@(@ r4, WIR_Usage::use @)@ æ}æ @)@,Ü\label{lst:iotest33}Ü
+      WIR_Instruction@(@ æ{æ RV32I::OpCode::JALR, RV32I::OperationFormat::RRC12_1,Ü\label{lst:iotest34}Ü
+         WIR_RegisterParameter@(@ p.x0@()@, WIR_Usage::def @)@, WIR_RegisterParameter@(@ p.x1@()@, WIR_Usage::use @)@,Ü\label{lst:iotest35}Ü
+         RV_Const12_Signed@(@ §0§ @)@, WIR_RegisterParameter@(@ p.x10@()@, WIR_Usage::use, true @)@ æ}æ @)@ æ}æ @)@;Ü\label{lst:iotest36}Ü
+
+  // Generate code for the current WIR system.
+  ästd::coutä æ<<æ sys æ<<æ ästd::endlä;Ü\label{lst:iotest37}Ü
+
+  return@(@ §0§ @)@;
+}
+\end{lstlisting}
+\clearpage
+
+In a similar fashion, another virtual register is created within the second function \texttt{bar} of compilation unit \texttt{file2.s} (\cref{lst:iotest24}).
+\crefrange{lst:iotest25}{lst:iotest27} show the construction of a data object inside \texttt{file2.s} that is initialized with \texttt{4711}.
+Function \texttt{bar} itself obtains one basic block (\cref{lst:iotest28}) featuring three instructions where each instruction consists of exactly one operation each (\cref{lst:iotest29,lst:iotest31,lst:iotest34}).
+
+Finally, the entire code structure accommodated by the \gls{WIR} system is simply printed out to \texttt{cout} in \cref{lst:iotest37}.
+
+Compiling and executing this example program from \cref{lst:iotest} according to \cref{chap:build} yields the following \gls{WIR} output:
+
+\begin{lstlisting}[style=commandline,float=h]
+FILE file1.sÜ\label{lst:wiroutput1}Ü
+{Ü\label{lst:wiroutput2}Ü
+
+SECTION .textÜ\label{lst:wiroutput3}Ü
+{Ü\label{lst:wiroutput4}Ü
+
+FUNCTION fooÜ\label{lst:wiroutput5}Ü
+{Ü\label{lst:wiroutput6}Ü
+foo:Ü\label{lst:wiroutput7}Ü
+        addi RRC12_1 x_5733, x_5735, 42;Ü\label{lst:wiroutput8}Ü
+     Ü||Ü jal RL_1 x_5737, bar;Ü\label{lst:wiroutput9}Ü
+};Ü\label{lst:wiroutput10}Ü
+
+};Ü\label{lst:wiroutput11}Ü
+
+};Ü\label{lst:wiroutput12}Ü
+
+
+FILE file2.sÜ\label{lst:wiroutput13}Ü
+{Ü\label{lst:wiroutput14}Ü
+
+SECTION .dataÜ\label{lst:wiroutput15}Ü
+{Ü\label{lst:wiroutput16}Ü
+
+DATA dataObjectÜ\label{lst:wiroutput17}Ü
+{Ü\label{lst:wiroutput18}Ü
+  4711Ü\label{lst:wiroutput19}Ü
+};Ü\label{lst:wiroutput20}Ü
+
+};Ü\label{lst:wiroutput21}Ü
+
+SECTION .textÜ\label{lst:wiroutput22}Ü
+{Ü\label{lst:wiroutput23}Ü
+
+FUNCTION barÜ\label{lst:wiroutput24}Ü
+{Ü\label{lst:wiroutput25}Ü
+bar:Ü\label{lst:wiroutput26}Ü
+        lui RL_2 x_5758, dataObject;Ü\label{lst:wiroutput27}Ü
+        lw RLR_1 x10, dataObject, x_5758;Ü\label{lst:wiroutput28}Ü
+        jalr RRC12_1 x0, x1, 0;Ü\label{lst:wiroutput29}Ü
+};Ü\label{lst:wiroutput30}Ü
+
+};Ü\label{lst:wiroutput31}Ü
+
+};Ü\label{lst:wiroutput32}Ü
+\end{lstlisting}
+
+This output is entirely generic in that sense that it is unaware of any RISC-V specific code conventions.
+As can be seen from, e.g., \cref{lst:wiroutput2,lst:wiroutput4,lst:wiroutput6} and \crefrange{lst:wiroutput10}{lst:wiroutput12}, such generic \gls{WIR} output consists of a dump of nested, hierarchical scopes that are all enclosed in curly brackets \texttt{\{\,...\,\}}.
+Each such scope begins with a keyword specifying the scope's nature, e.g., \texttt{FILE}, \texttt{SECTION}, \texttt{FUNCTION} or \texttt{DATA}, followed by the (optional) name of the corresponding component.
+
+The output of a \gls{WIR} function consists of the printout of all basic blocks of that function.
+Each basic block is printed out beginning with its name followed by a colon (cf. \cref{lst:wiroutput7,lst:wiroutput26}).
+Line by line, all instructions contained by a basic block are emitted next (e.g., \crefrange{lst:wiroutput27}{lst:wiroutput29}).
+For each instruction, its operations are dumped again line by line, where the operation's output starts (indented by 8 whitespaces) with its mnemonic string followed by the operation format's name.
+Finally, all explicit parameters of an operation are printed out as comma-separated list.
+The output of an operation ends with a semicolon (\cref{lst:wiroutput28}).
+For instructions containing several operations, the dump of all operations except the very first one always begins with a ``parallel'' operator \texttt{||} as can be seen in \cref{lst:wiroutput9}.
+According to \cref{sec:instructions}, all operations of an instruction are supposed to be executed in parallel, which is indicated in the \gls{WIR} output this way.
+
+
+%-------------------------------------------------------------------------
+\section{Stream Manipulators}
+\label{sec:streammanip}
+%-------------------------------------------------------------------------
+
+The generic \gls{WIR} output from the previous section reveals that certain code properties that are specified in the example program from \cref{lst:iotest} are not printed out by default:
+\begin{itemize}
+  \item Function \texttt{foo} contains virtual registers \texttt{x\_5733}, \texttt{x\_5735} and \texttt{x\_5737} (\crefrange{lst:iotest13}{lst:iotest15}), and function \texttt{bar} features virtual register \texttt{x\_5758} (\cref{lst:iotest24});
+  \item Virtual registers \texttt{x\_5735} and \texttt{x\_5737} are precolored with certain physical registers (\cref{lst:iotest16,lst:iotest17});
+  \item Various register parameters of the shown operations are defined (e.g., \cref{lst:iotest23}), while others are used (e.g., \cref{lst:iotest33});
+  \item Implicit register parameters such as \texttt{p.x10} in \cref{lst:iotest36} are not printed at all in the default \gls{WIR} output.
+\end{itemize}
+This default behavior is motivated by the objective to keep the output as simple as possible and to primarily focus on the \gls{WIR} software model's code hierarchy.
+However, the output of additional details can selectively be turned on or off by using the C++ stream manipulators declared in file \texttt{WIR/wir/wirio.h}.
+A stream manipulator is a simple function that receives an output stream as argument, modifies it internally so that different output will be created, and returns a reference to the modified stream.
+\cref{lst:iodefuse1} of \cref{lst:iodefuse} shows a sample declaration of the \texttt{defuse} stream manipulator.
+This manipulator enables the output of additional def/use properties for register parameters.
+In analogy to the standard C++ \gls{API}, each \gls{WIR} manipulator activating a certain output property comes with a manipulator to deactivate this behavior again.
+The name of such manipulators always begins with ``\texttt{no}'' which can be seen from the example \texttt{nodefuse} from \cref{lst:iodefuse2}.
+
+\begin{lstlisting}[style=code,float=h,caption={Declaration of \texttt{defuse} and \texttt{nodefuse} Stream Manipulators in file \texttt{wirio.h}},label=lst:iodefuse]
+// Switch the output of def/use characteristics for register parameters on.
+ästd::ostreamä æ&ædefuse@(@ ästd::ostreamä æ&æos @)@;Ü\label{lst:iodefuse1}Ü
+
+// Switch the output of def/use characteristics for register parameters off.
+ästd::ostreamä æ&ænodefuse@(@ ästd::ostreamä æ&æos @)@;Ü\label{lst:iodefuse2}Ü
+\end{lstlisting}
+
+In order to control the level of detail of generic \gls{WIR} output, the manipulators shown in \cref{tab:iomanip} are declared in file \texttt{wirio.h}.
+They allow to address all the abovementioned issues.
+In addition to that, the output of jump targets that are explicitly annotated for jump operations (cf. \cref{lst:opjmptgt}) can also be controlled.
+Finally, the output of potentially existing comments and source file information can also be activated or deactivated.
+
+When changing \cref{lst:iotest37} from \cref{lst:iotest} to
+
+\begin{lstlisting}[style=code,float=h,firstnumber=55]
+  // Generate code for the current WIR system.
+  ästd::coutä æ<<æ defuse æ<<æ functionregisters æ<<æ implicitparams æ<<æ precolors æ<<æ sys æ<<æ ästd::endlä;
+\end{lstlisting}
+
+\begin{table}[t]
+  \begin{center}
+    \caption{Generic Stream Manipulators from file \texttt{wirio.h}}
+    \label{tab:iomanip}
+    \begin{tabular}{|l|p{9.2cm}|}
+      \hline
+      \textbf{Manipulators} & \textbf{Enabled/Disabled Output Property} \\
+      \hhline{|=|=|}
+      \texttt{comment}, \texttt{nocomment} & Comments attached to \gls{WIR} objects \\
+      \hline
+      \texttt{defuse}, \texttt{nodefuse} & Def/use characteristics of register parameters \\
+      \hline
+      \texttt{fileinfo}, \texttt{nofileinfo} & Source code file information attached to \gls{WIR} objects \\
+      \hline
+      \texttt{functionregisters}, \texttt{nofunctionregisters} & Virtual registers owned by functions \\
+      \hline
+      \texttt{implicitparams}, \texttt{noimplicitparams} & Implicit parameters of operations \\
+      \hline
+      \texttt{jumptargets}, \texttt{nojumptargets} & Explicitly specified targets of jump operations \\
+      \hline
+      \texttt{precolors}, \texttt{noprecolors} & Precoloring information of functions \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+the produced \gls{WIR} output for the two functions \texttt{foo} and \texttt{bar} from the previous example program changes to:
+
+\begin{lstlisting}[style=commandline,float=!h]
+[...]
+
+FUNCTION fooÜ\label{lst:wirmanip1}Ü
+{Ü\label{lst:wirmanip2}Ü
+  {Ü\label{lst:wirmanip3}Ü
+    registers: x_5733 x_5735 x_5737;Ü\label{lst:wirmanip4}Ü
+    precolors: x_5735=x0 x_5737=x1;Ü\label{lst:wirmanip5}Ü
+  }Ü\label{lst:wirmanip6}Ü
+foo:Ü\label{lst:wirmanip7}Ü
+        addi RRC12_1 x_5733 (def, ID = 5747), x_5735 (use, ID = 5748), 42;Ü\label{lst:wirmanip8}Ü
+     Ü||Ü jal RL_1 x_5737 (def, ID = 5741), bar;Ü\label{lst:wirmanip9}Ü
+};Ü\label{lst:wirmanip10}Ü
+
+[...]
+
+FUNCTION barÜ\label{lst:wirmanip11}Ü
+{Ü\label{lst:wirmanip12}Ü
+  {Ü\label{lst:wirmanip13}Ü
+    registers: x_5755;Ü\label{lst:wirmanip14}Ü
+    precolors: ;Ü\label{lst:wirmanip15}Ü
+  }Ü\label{lst:wirmanip16}Ü
+bar:Ü\label{lst:wirmanip17}Ü
+        lui RL_2 x_5755 (def, ID = 5762), dataObject;Ü\label{lst:wirmanip18}Ü
+        lw RLR_1 x10 (def, ID = 5769), dataObject, x_5755 (use, ID = 5771);Ü\label{lst:wirmanip19}Ü
+        jalr RRC12_1 x0 (def, ID = 5778), x1 (use, ID = 5779), 0, x10 (use, ID = 5781);Ü\label{lst:wirmanip20}Ü
+};Ü\label{lst:wirmanip21}Ü
+
+[...]
+\end{lstlisting}
+
+As can be seen from \crefrange{lst:wirmanip3}{lst:wirmanip6} and \crefrange{lst:wirmanip13}{lst:wirmanip16}, each function now begins with another scope containing information about the function's registers and its specified precolorings.
+This information starts with the keywords \texttt{registers:} and \texttt{precolors:}, resp., followed by a whitespace-separated list of registers or precolorings.
+These lines of output always end with a semicolon.
+\cref{lst:wirmanip8,lst:wirmanip9,lst:wirmanip18,lst:wirmanip19,lst:wirmanip20} furthermore show that the output for each register parameter now is extended by parentheses \texttt{(\,...\,)} containing the information whether a parameter is defined, used, or both, plus the parameter's unique ID.
+A closer look at \cref{lst:wirmanip20} also shows that the previously omitted implicit parameter is now printed, too.
+
+\begin{lstlisting}[style=code,float=t,caption={Constructors and Methods for Comment Text Handling of Class \texttt{WIR\_Comment}},label=lst:commentconstruction]
+// Default constructor creating a single-line comment from a copied string.
+explicit WIR_Comment::WIR_Comment@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:commentconstruction1}Ü
+
+// Default constructor creating a single-line comment from a moved string.
+explicit WIR_Comment::WIR_Comment@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:commentconstruction2}Ü
+
+// Copy constructor.
+WIR_Comment::WIR_Comment@(@ const WIR_Comment æ&æc @)@;Ü\label{lst:commentconstruction3}Ü
+
+// Move constructor.
+WIR_Comment::WIR_Comment@(@ WIR_Comment æ&&æc @)@;Ü\label{lst:commentconstruction4}Ü
+
+// Set comment text from a copied string.
+@void@ WIR_Comment::setText@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:commentconstruction5}Ü
+
+// Set comment text from a moved string.
+@void@ WIR_Comment::setText@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:commentconstruction6}Ü
+
+// Get a comment's text.
+ästd::stringä WIR_Comment::getText@( void )@ const;Ü\label{lst:commentconstruction7}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!b,caption={Constructors and Methods for File Location Handling of Class \texttt{WIR\_FileInfo}},label=lst:fileinfoconstruction]
+// Default constructor creating file information from a copied string.
+WIR_FileInfo::WIR_FileInfo@(@ const ästd::stringä æ&æs, äunsigned long longä l @)@;Ü\label{lst:fileinfoconstruction1}Ü
+
+// Default constructor creating file information from a moved string.
+WIR_FileInfo::WIR_FileInfo@(@ ästd::stringä æ&&æs, äunsigned long longä l @)@;Ü\label{lst:fileinfoconstruction2}Ü
+
+// Copy constructor.
+WIR_FileInfo::WIR_FileInfo@(@ const WIR_FileInfo æ&æf @)@;Ü\label{lst:fileinfoconstruction3}Ü
+
+// Move constructor.
+WIR_FileInfo::WIR_FileInfo@(@ WIR_FileInfo æ&&æf @)@;Ü\label{lst:fileinfoconstruction4}Ü
+
+// Set file name from a copied string.
+@void@ WIR_FileInfo::setFileName@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:fileinfoconstruction5}Ü
+
+// Set file name from a moved string.
+@void@ WIR_FileInfo::setFileName@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:fileinfoconstruction6}Ü
+
+// Get the file name.
+ästd::stringä WIR_FileInfo::getFileName@( void )@ const;Ü\label{lst:fileinfoconstruction7}Ü
+
+// Set line number.
+@void@ WIR_FileInfo::setLineNumber@(@ äunsigned long longä l @)@;Ü\label{lst:fileinfoconstruction8}Ü
+
+// Get line number.
+äunsigned long longä WIR_FileInfo::getLineNumber@( void )@ const;Ü\label{lst:fileinfoconstruction9}Ü
+\end{lstlisting}
+
+\gls{WIR} uses so-called containers in order to attach arbitrary kinds of meta-data to all parts of its software model.
+The discussion of this container \gls{API} is beyond the scope of this chapter, details will be provided later in \cref{sec:containers}.
+However, the previously mentioned comments and source file information are very simple examples of such containers.
+
+Class \texttt{WIR\_Comment} can be found in file \texttt{WIR/containers/wircomment.h}, and it represents single-line string comments.
+The public interface of such comments (cf. \cref{lst:commentconstruction}) is extremely straightforward and simple so that a more detailed discussion is omitted here.
+However, it is worthwhile to mention that comment containers represent single-line comments so that any newline character passed to class \texttt{WIR\_Comment} is removed.
+
+File information objects intend to establish a link between a certain construct within the \gls{WIR} software model and a location in some source code from which the \gls{WIR} object has been generated.
+Such code locations usually come in the form of pairs of file names and line numbers, and this is exactly what is represented by class \texttt{WIR\_FileInfo} from file \texttt{WIR/containers/wirfileinfo.h}, cf. \cref{lst:fileinfoconstruction}.
+Both a file name and a line number can be specified during construction or can be set later via the \texttt{set} methods.
+As above, file names are assumed to be single-line strings so that line breaks are removed.
+
+Coming back to the example program from \cref{lst:iotest}, such comments and file information can be added and printed out, e.g., as follows:
+
+\begin{lstlisting}[style=code,float=h,firstnumber=55]
+  f1.insertContainer( WIR_FileInfo( "file1.c", 37 ) );Ü\label{lst:fileinfo1}Ü
+  f2.begin()->get().insertContainer( WIR_Comment( "A commented WIR basic block." ) );Ü\label{lst:fileinfo2}Ü
+
+  // Generate code for the current WIR system.
+  ästd::coutä æ<<æ comment æ<<æ fileinfo æ<<æ sys æ<<æ ästd::endlä;Ü\label{lst:fileinfo3}Ü
+\end{lstlisting}
+
+\cref{lst:fileinfo1} attaches a file location to function \texttt{foo}, referring to some C file \texttt{file1.c} and line number 37.
+The first basic block of function \texttt{bar} is extended by a comment in \cref{lst:fileinfo2}.
+The output finally resulting from \cref{lst:fileinfo3} is:
+
+\begin{lstlisting}[style=commandline,float=!h]
+[...]
+
+Ü\textit{\color{gray}; file "file1.c", line 37\label{lst:comment1}}Ü
+FUNCTION foo
+{
+foo:
+        addi RRC12_1 x_5733, x_5735, 42;
+     Ü||Ü jal RL_1 x_5737, bar;
+};
+
+[...]
+
+FUNCTION bar
+{
+Ü\textit{\color{gray}; A commented WIR basic block.\label{lst:comment2}}Ü
+bar:
+        lui RL_2 x_5755, dataObject;
+        lw RLR_1 x10, dataObject, x_5755;
+        jalr RRC12_1 x0, x1, 0;
+};
+
+[...]
+\end{lstlisting}
+
+As can be seen, both the file information (cf. \cref{lst:comment1}) and the comment (\cref{lst:comment2}) are printed before their respective \gls{WIR} objects (here: function \texttt{foo} and basic block \texttt{bar}) are printed.
+The output of both containers starts with a semicolon followed by the container's data in the rest of the line.
+
+
+%-------------------------------------------------------------------------
+\section{Processor-Specific Assembly Code Generation}
+\label{sec:asmcode}
+%-------------------------------------------------------------------------
+
+The discussion of code generation in the previous sections of this chapter solely focussed on generic and processor-independent output.
+This section thus shows how to produce processor-specific output that obeys the assembly-level code conventions of the architectures currently supported by \gls{WIR}.
+
+From a user's perspective, generating processor-specific assembly code is as simple as already introduced in \cref{sec:streammanip} by using the stream manipulators summarized in \cref{tab:procmanip}.
+They are named according to their respective processor families shown in the second column and aim to provide GNU assembler-compliant output.
+As shown in the right column, they are declared inside the architectures' various sub-directories.
+Since the MIPS SPIM architecture just serves as a demonstrator within \gls{WIR} and is currently not used for real code generation, the \texttt{mips} manipulator only produces rudimentary valid assembly output.
+For the other manipulators \texttt{arm}, \texttt{riscv} and \texttt{tricore}, the \gls{WIR} unit tests (cf. \cref{chap:build}) ensure the generation of valid assembly.
+The \texttt{wir} stream manipulator switches a stream back to the generic output described in the previous sections.
+
+When revisiting the previous example, generating RISC-V code can be achieved easily by changing \cref{lst:fileinfo3} to:
+
+\begin{lstlisting}[style=code,float=h,firstnumber=58]
+  // Generate RISC-V code for the current WIR system.
+  ästd::coutä æ<<æ riscv æ<<æ comment æ<<æ fileinfo æ<<æ sys æ<<æ ästd::endlä;Ü\label{lst:rvoutput}Ü
+\end{lstlisting}
+
+As a result, \gls{WIR} now produces the following assembly output:
+
+\begin{lstlisting}[style=commandline,float=!h]
+        .file           "file1.s"
+        # Generated using wir release 2.0 (2024-03-24)
+        # for RISC-V ISA RV32IMC
+
+        .section        .text
+        .balign         8
+        # file "file1.c", line 37
+        .type           foo, Ü@Üfunction
+foo:
+        addi            x_5733, x_5735/x0, 42
+        jal             x_5737/x1, bar
+        .size           foo, .-foo
+
+        .file           "file2.s"
+        # Generated using wir release 2.0 (2024-03-24)
+        # for RISC-V ISA RV32IMC
+
+        .section        .data, "aw"
+        .balign         8
+        .type           dataObject, Ü@Üobject
+        .size           dataObject, 4
+dataObject:
+        .word           4711
+
+        .section        .text
+        .balign         8
+        .type           bar, Ü@Üfunction
+        # A commented WIR basic block.
+bar:
+        lui             x_5755, %hi(dataObject)Ü\label{lst:rvasm1}Ü
+        lw              x10, %lo(dataObject)(x_5755)Ü\label{lst:rvasm2}Ü
+        jalr            x0, x1, 0
+        .size           bar, .-bar
+\end{lstlisting}
+
+\begin{table}[t]
+  \begin{center}
+    \caption{Processor-Specific Stream Manipulators}
+    \label{tab:procmanip}
+    \begin{tabular}{|l|l|p{5.1cm}|}
+      \hline
+      \textbf{Manipulator} & \textbf{Processor Families} & \textbf{File of Declaration} \\
+      \hhline{|=|=|=|}
+      \texttt{arm} & All models from ARMv4 to ARMv6 from \cref{ssec:armmodel} & \texttt{WIR/arch/arm/armio.h} \\
+      \hline
+      \texttt{mips} & MIPS SPIM model from \cref{ssec:mipsmodel} & \texttt{WIR/arch/generic/mipsio.h} \\
+      \hline
+      \texttt{riscv} & All models from RV32I to RV32IMFDC from \cref{ssec:rv32model} & \texttt{WIR/arch/riscv/rvio.h} \\
+      \hline
+      \texttt{tricore} & TC13 and TC131 models from \cref{ssec:tcmodel} & \texttt{WIR/arch/tricore/tcio.h} \\
+      \hline
+      \texttt{wir} & \gls{WIR} generic output from \cref{sec:streamio} & \texttt{WIR/wir/wirio.h} \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+As can be seen, the various scopes of the previous, generic \gls{WIR} output representing, e.g., compilation units, sections and data objects are now printed as valid assembly directives.
+The code of the functions themselves is also formatted in a proper manner where, e.g., the output of operation formats is omitted, or the specifiers \texttt{\%hi(...)} and \texttt{\%lo(...)} are used in \cref{lst:rvasm1,lst:rvasm2}.
+The only aspect in the above example output that is not fully RISC-V assembly compliant is the use of virtual registers and their output together with their precolorings.
+This, however, is not an issue of \gls{WIR}'s code generation mechanisms.
+Instead, this is solely due to the use of virtual instead of physical registers in the running example.
+
+For all classes of the \gls{WIR} software model, their respective \texttt{<{}<} stream operators invoke so-called dumper functions, where such a dumper performs the actual task of printing out a \gls{WIR} object.
+File \texttt{WIR/wir/wirio.h} declares a couple of data types that represent function pointers for all these available dumper functions.
+As \cref{lst:bbio} showed the example of the \texttt{<{}<} operator for basic blocks, \cref{lst:iodumper} now shows the declaration of the corresponding basic block dumper type.
+Functions of this type thus expect a reference to an output stream as well as a constant reference to a basic block to be printed out.
+
+\begin{lstlisting}[style=code,float=h,caption={Declaration of Basic Block Dumper Type in file \texttt{wirio.h}},label=lst:iodumper]
+// Type WIR_BasicBlockDumper represents pointers to functions for processor-specific output of basic blocks.
+using WIR_BasicBlockDumper = @void (@æ*æ@)(@ ästd::ostreamä æ&æ, const WIR_BasicBlock æ&æ @)@;Ü\label{lst:iodumper1}Ü
+\end{lstlisting}
+
+For all processor families listed in \cref{tab:procmanip}, there now exist actual dumper functions that realize the processor-specific output of \gls{WIR} objects.
+For example, the RISC-V-specific output of basic blocks is realized by function \texttt{dumpRVBasicBlock} declared in file \texttt{WIR/arch/riscv/rvio.h} (cf. \cref{lst:rvdumper}).
+As can be seen, this actual function is precisely of type \texttt{WIR\_BasicBlockDumper} as declared in \cref{lst:iodumper}.
+
+\begin{lstlisting}[style=code,float=h,caption={Declaration of RISC-V-Specific Basic Block Dumper},label=lst:rvdumper]
+// Dump a basic block to an output stream in a RISC-V-specific fashion.
+@void@ dumpRVBasicBlock@(@ ästd::ostreamä æ&æos, const WIR_BasicBlock æ&æb @)@;Ü\label{lst:rvdumper1}Ü
+\end{lstlisting}
+
+The \gls{WIR} library now finally uses an internal map that returns the appropriate function pointers to these processor-specific dumpers, depending on the stream manipulator from \cref{tab:procmanip} that has been applied to an output stream before.
+\cref{sssec:opformats} has already introduced that certain aspects of a processor model need to be registered centrally within \gls{WIR} during the initialization of the entire library.
+This previous discussion of processor-specific initialization revolved around the registration of operation formats and opcodes, cf. \cref{lst:tcopfreg} on \cpageref{lst:tcopfreg}.
+The last aspect of \gls{WIR} initialization now is the proper registration of the various processor-specific dumpers in this internal map.
+The corresponding excerpt of the initialization for the RISC-V processor family is shown in \cref{lst:rvdumpreg}.
+Here, all the existing dumpers are registered, and \cref{lst:rvdumpreg1} showcases the concrete example of the RISC-V-specific basic block dumper registration.
+
+All registrations of dumpers from \crefrange{lst:rvdumpreg1}{lst:rvdumpreg2} use method \texttt{getProcessorTypeID} (cf. \cref{lst:proctypes} on \cpageref{lst:proctypes}) in order to associate the given dumpers with the unique constant ID of the currently initialized processor family.
+The stream manipulators from \cref{tab:procmanip} now finally associate exactly this unique processor ID with an output stream so that all the \texttt{<{}<} operators of the \gls{WIR} software model can obtain the proper processor-specific dumpers from the abovementioned internal map.
+
+\begin{lstlisting}[style=code,float=t,caption={Dumper Function Registration (here for Class \texttt{RV32I})},label=lst:rvdumpreg]
+@void@ RV32I::init@( void )@
+{
+  [...]
+
+  // Registration of RV32I dumpers.
+  registerBasicBlockDumper( getProcessorTypeID(), dumpRVBasicBlock );Ü\label{lst:rvdumpreg1}Ü
+  registerCompilationUnitDumper( getProcessorTypeID(), dumpRVCompilationUnit );
+  registerDataDumper( getProcessorTypeID(), dumpRVData );
+  registerDataSectionDumper( getProcessorTypeID(), dumpRVDataSection );
+  registerFunctionDumper( getProcessorTypeID(), dumpRVFunction );
+  registerOperationDumper( getProcessorTypeID(), dumpRVOperation );
+  registerRegisterParameterDumper( getProcessorTypeID(), dumpRVRegisterParameter );
+  registerCommentDumper( getProcessorTypeID(), dumpRVComment );
+  registerFileInfoDumper( getProcessorTypeID(), dumpRVFileInfo );Ü\label{lst:rvdumpreg2}Ü
+
+  // RV32I operation formats.
+
+  [...]
+};
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Linker Script Generation}
+\label{sec:ldscripts}
+%-------------------------------------------------------------------------
+
+One particular stream manipulator has not yet been introduced in the previous sections, as its purpose is not directly related to the generation of actual code from the \gls{WIR} software model.
+As discussed earlier in \cref{sec:memlayout}, \gls{WIR} systems provide mechanisms for the mapping of logical sections to physical memory regions, and for the allocation of symbols to sections.
+In other words, the allocation of code or data to a system's different memories can be determined at the system level.
+
+\gls{WIR} is designed to be an assembly-level \gls{IR}.
+In contrast, such memory allocation decisions are regularly enforced at the level of binary executable code by applying some linker.
+The code generated using the concepts described in the previous sections of this chapter does not contain any provisions to enforce some memory allocation specified by a \gls{WIR} system.
+For this purpose, the manipulator \texttt{ldscript} (cf. \cref{lst:ioldscript1} of \cref{lst:ioldscript}) can be used.
+It enables the generation of a GNU linker-compliant script that in turn forces the linker to respect the memory allocations defined by the \gls{WIR} system.
+This manipulator has only effect on the \texttt{<{}<} output operator of class \texttt{WIR\_System}, and the manipulator \texttt{noldscript} (\cref{lst:ioldscript2}) switches a stream back to the generation of regular code.
+
+\begin{lstlisting}[style=code,float=h,caption={Declaration of \texttt{ldscript} and \texttt{noldscript} Stream Manipulators in file \texttt{wirio.h}},label=lst:ioldscript]
+// Switch the output of a linker script for WIR systems on.
+ästd::ostreamä æ&ældscript@(@ ästd::ostreamä æ&æos @)@;Ü\label{lst:ioldscript1}Ü
+
+// Switch the output of a linker script for WIR systems off.
+ästd::ostreamä æ&ænoldscript@(@ ästd::ostreamä æ&æos @)@;Ü\label{lst:ioldscript2}Ü
+\end{lstlisting}
+
+
+\cleardoubleoddpage

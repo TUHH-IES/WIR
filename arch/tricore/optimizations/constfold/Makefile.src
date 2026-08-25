@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/tricore/optimizations/constfold/tcconstfold.cc arch/tricore/optimizations/constfold/tcconstfold.h

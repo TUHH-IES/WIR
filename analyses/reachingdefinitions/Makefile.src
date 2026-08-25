@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += analyses/reachingdefinitions/wirreachingdefinitionsanalysis.cc analyses/reachingdefinitions/wirreachingdefinitionsanalysis.h

@@ -1,0 +1,166 @@
+digraph G {
+compound=true;
+newrank=true;
+graph [rotate=90]
+subgraph clusterLegend {
+legendBB[label="Basic Block",shape=oval]
+;
+legendBBEntry[label="Entry Node",shape=oval,style=bold]
+;
+legendRegion[label="Control Region",shape=box,color=blue]
+;
+legend1[shape=point]
+;
+legend2[shape=point]
+;
+legend1->legend2[label="Back edge",dir=forward,arrowhead=vee,arrowtail=none,color=chartreuse4,style=bold]
+;
+legend3[shape=point]
+;
+legend4[shape=point]
+;
+legend3->legend4[label="Loop exit edge",dir=forward,arrowhead=vee,arrowtail=none,color=orange,style=bold]
+;
+legend5[shape=point]
+;
+legend6[shape=point]
+;
+legend5->legend6[label="Break edge",dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+}
+  3[label=".L3"]
+;
+subgraph cluster5685 {
+  label="If-Then Region";
+  color=blue;
+  1[label=".L1",style=bold]
+;
+  2[label=".L2"]
+;
+}
+1->2[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+1->3[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+2->3[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+
+  7[label=".L7"]
+;
+subgraph cluster5691 {
+  label="If-Then-Else Region";
+  color=blue;
+  4[label=".L4",style=bold]
+;
+  5[label=".L5"]
+;
+  6[label=".L6"]
+;
+}
+4->5[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+4->6[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+5->7[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+6->7[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+
+  14[label=".L14"]
+;
+subgraph cluster5701 {
+  label="Switch-Case Region";
+  color=blue;
+  8[label=".L8",style=bold]
+;
+  9[label=".L9"]
+;
+  10[label=".L10"]
+;
+  11[label=".L11"]
+;
+  12[label=".L12"]
+;
+  13[label=".L13"]
+;
+}
+8->9[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+8->10[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+8->11[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+8->12[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+8->13[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+9->14[dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+10->14[dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+11->14[dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+12->14[dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+13->14[dir=forward,arrowhead=vee,arrowtail=none,color=red,style=bold]
+;
+
+  15[label=".L15",style=bold]
+;
+subgraph cluster5724 {
+  label="While-Do Loop";
+  color=blue;
+  16[label=".L16",style=bold]
+;
+subgraph cluster5723 {
+  label="Block Region";
+  color=blue;
+  17[label=".L17",style=bold]
+;
+  18[label=".L18"]
+;
+}
+}
+  19[label=".L19"]
+;
+15->16[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+16->17[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+16->19[dir=forward,arrowhead=vee,arrowtail=none,color=orange,style=bold]
+;
+17->18[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+18->16[dir=forward,arrowhead=vee,arrowtail=none,style=bold,color=chartreuse4,style=bold]
+;
+
+  20[label=".L20",style=bold]
+;
+subgraph cluster5719 {
+  label="Natural Loop";
+  color=blue;
+  21[label=".L21",style=bold]
+;
+subgraph cluster5718 {
+  label="Block Region";
+  color=blue;
+  22[label=".L22",style=bold]
+;
+  23[label=".L23"]
+;
+}
+}
+  24[label=".L24"]
+;
+20->21[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+21->22[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+22->23[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+23->21[dir=forward,arrowhead=vee,arrowtail=none,style=bold,color=chartreuse4,style=bold]
+;
+23->24[dir=forward,arrowhead=vee,arrowtail=none,color=orange,style=bold]
+;
+
+}

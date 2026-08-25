@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/tricore/optimizations/jumpcorrection/tcjumpcorrection.cc arch/tricore/optimizations/jumpcorrection/tcjumpcorrection.h

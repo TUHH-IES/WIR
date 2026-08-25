@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/riscv/optimizations/constprop/rvconstprop.cc arch/riscv/optimizations/constprop/rvconstprop.h

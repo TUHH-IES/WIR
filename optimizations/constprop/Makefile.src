@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/constprop/wirconstprop.cc optimizations/constprop/wirconstprop.h

@@ -1,0 +1,48 @@
+include arch/riscv/analyses/Makefile.src
+include arch/riscv/optimizations/Makefile.src
+
+libwir_la_SOURCES      += arch/riscv/rv32i.cc arch/riscv/rv32i.h \
+                          arch/riscv/rv32ic.cc arch/riscv/rv32ic.h \
+                          arch/riscv/rv32if.cc arch/riscv/rv32if.h \
+                          arch/riscv/rv32ifc.cc arch/riscv/rv32ifc.h \
+                          arch/riscv/rv32ifd.cc arch/riscv/rv32ifd.h \
+                          arch/riscv/rv32ifdc.cc arch/riscv/rv32ifdc.h \
+                          arch/riscv/rv32im.cc arch/riscv/rv32im.h \
+                          arch/riscv/rv32imc.cc arch/riscv/rv32imc.h \
+                          arch/riscv/rv32imf.cc arch/riscv/rv32imf.h \
+                          arch/riscv/rv32imfc.cc arch/riscv/rv32imfc.h \
+                          arch/riscv/rv32imfd.cc arch/riscv/rv32imfd.h \
+                          arch/riscv/rv32imfdc.cc arch/riscv/rv32imfdc.h \
+                          arch/riscv/rv32iopcodes.cc \
+                          arch/riscv/rv32icopcodes.cc \
+                          arch/riscv/rv32ifopcodes.cc \
+                          arch/riscv/rv32ifdopcodes.cc \
+                          arch/riscv/rv32imopcodes.cc \
+                          arch/riscv/rv32ioperationformats.cc \
+                          arch/riscv/rv32icoperationformats.cc \
+                          arch/riscv/rv32ifoperationformats.cc \
+                          arch/riscv/rv32iregistertypes.cc \
+                          arch/riscv/rv32ifregistertypes.cc \
+                          arch/riscv/rvconst5unsigned.cc arch/riscv/rvconst5unsigned.h \
+                          arch/riscv/rvconst6signed.cc arch/riscv/rvconst6signed.h \
+                          arch/riscv/rvconst6unsigned.cc arch/riscv/rvconst6unsigned.h \
+                          arch/riscv/rvconst7unsigned.cc arch/riscv/rvconst7unsigned.h \
+                          arch/riscv/rvconst8unsigned.cc arch/riscv/rvconst8unsigned.h \
+                          arch/riscv/rvconst10signed.cc arch/riscv/rvconst10signed.h \
+                          arch/riscv/rvconst10unsigned.cc arch/riscv/rvconst10unsigned.h \
+                          arch/riscv/rvconst12signed.cc arch/riscv/rvconst12signed.h \
+                          arch/riscv/rvconst20unsigned.cc arch/riscv/rvconst20unsigned.h \
+                          arch/riscv/rvnzconst20unsigned.cc arch/riscv/rvnzconst20unsigned.h \
+                          arch/riscv/rvio.cc arch/riscv/rvio.h \
+                          arch/riscv/rveregphysical.cc arch/riscv/rveregphysical.h \
+                          arch/riscv/rveregvirtual.cc arch/riscv/rveregvirtual.h \
+                          arch/riscv/rvfregphysical.cc arch/riscv/rvfregphysical.h \
+                          arch/riscv/rvfregvirtual.cc arch/riscv/rvfregvirtual.h \
+                          arch/riscv/rvqregvirtual.cc arch/riscv/rvqregvirtual.h \
+                          arch/riscv/rvregphysical.cc arch/riscv/rvregphysical.h \
+                          arch/riscv/rvregvirtual.cc arch/riscv/rvregvirtual.h
+
+riscvsysconfdir         = ${sysconfdir}/riscv
+riscvsysconf_DATA       = arch/riscv/esp32-c3.sys \
+                          arch/riscv/generic-rv32imfc.sys \
+                          arch/riscv/rudolv.sys

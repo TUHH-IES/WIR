@@ -1,0 +1,21 @@
+0. INTRODUCTION:
+================
+
+This directory contains all processor architecture-specific components of WIR.
+
+
+1. DIRECTORY STRUCTURE:
+=======================
+
+The current folder contains the following sub-folders:
+
+- arm: Contains WIR components for the ARM processor architecture.
+
+- generic: Contains WIR components for a generic 'MIPS/SPIM' processor
+    architecture useful for playing around with WIR.
+
+- riscv: Contains all WIR components for the open source RISC-V processor
+    architectures.
+
+- tricore: Contains all WIR components for the Infineon TriCore processor
+    architectures.

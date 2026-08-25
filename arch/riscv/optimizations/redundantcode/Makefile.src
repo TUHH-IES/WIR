@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/riscv/optimizations/redundantcode/rvredundantcode.cc arch/riscv/optimizations/redundantcode/rvredundantcode.h

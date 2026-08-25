@@ -1,0 +1,1 @@
+libwir_la_SOURCES	       += arch/riscv/analyses/bit/rv32bitdfa.cc arch/riscv/analyses/bit/rv32bitdfa.h

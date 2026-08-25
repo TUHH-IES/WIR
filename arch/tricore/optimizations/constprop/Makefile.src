@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/tricore/optimizations/constprop/tcconstprop.cc arch/tricore/optimizations/constprop/tcconstprop.h

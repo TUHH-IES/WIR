@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/siliconbugs/wirsiliconbugs.cc optimizations/siliconbugs/wirsiliconbugs.h

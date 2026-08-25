@@ -1,0 +1,759 @@
+%=========================================================================
+\chapter{Retargeting of Existing Code Analyses}
+\label{chap:anaretarget}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+As already mentioned earlier, the bit-true \gls{DFA} from \cref{sec:bitdflow} is the only analysis that requires processor-specific adaptations.
+All other \gls{WIR} analyses are generic and processor-independent.
+This chapter thus focuses on the steps that are required to retarget this one bit-true analysis to a novel processor architecture.
+
+
+%-------------------------------------------------------------------------
+\section{Bit-True Data Flow Analysis}
+\label{sec:bitdflowretarget}
+%-------------------------------------------------------------------------
+
+The bit-true \gls{DFA} performs a forward followed by a backward pass through the \gls{DFG}.
+These passes over a single \gls{DFG} node, i.e., for a processor-specific \gls{WIR} operation, are performed by the purely virtual methods \texttt{simulateTopDown} and \texttt{simulateBottomUp} of class \texttt{WIR\_BitDFA}, cf. \cref{lst:bitdfaretarget}.
+
+\begin{lstlisting}[style=code,float=h,caption={Interface of Class \texttt{WIR\_BitDFA} to be Retargeted},label=lst:bitdfaretarget]
+class WIR_BitDFA : public WIR_Analysis,
+                   public WIR_DFG
+{
+  public:
+
+    [...]
+
+  protected:
+
+    [...]
+
+    // Performs top-down forward simulation of a given operation.
+    virtual void simulateTopDown@(@ const WIR_Operation æ&æo,Ü\label{lst:bitdfaretarget1}Ü
+                                  ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æoperands,
+                                  ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æresults @)@ @=@ §0§;
+
+    // Performs bottom-up backward simulation of a given operation.
+    virtual void simulateBottomUp@(@ const WIR_Operation æ&æo,Ü\label{lst:bitdfaretarget2}Ü
+                                   ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æin,
+                                   ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æout,
+                                   ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æresults @)@ @=@ §0§;
+
+    [...]
+};
+\end{lstlisting}
+
+Besides the operation \texttt{o} to be analyzed, both methods receive references to maps as arguments.
+These maps map the unique IDs of the operation's parameters to their associated bit-true up/down values.
+For example, map \texttt{operands} of method \texttt{simulateTopDown} (cf. \cref{lst:bitdfaretarget1}) collects all parameters of \texttt{o} that somehow serve as input.
+This includes, e.g., used register parameters, immediate parameters or labels.
+For each of these input parameters, the associated down values as determined by the bit-true analysis can be retrieved from the map.
+Using all these input down values, method \texttt{simulateTopDown} then has to compute the bit-true outputs of operation \texttt{o}.
+These outputs are again represented using down values, which then get associated with all output parameters of \texttt{o}, i.e., all defined register parameters.
+Consequently, map \texttt{results} of \texttt{simulateTopDown} maps the IDs of all parameters that get defined by \texttt{o} to their newly determined down values.
+The task of \texttt{simulateTopDown} is thus to populate map \texttt{results} with down values for all output parameters, depending on the down values along all input parameters and under consideration of the bit-true behavior of \texttt{o}'s opcode and its operation format.
+
+\begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Bit-True Data Flow Analysis},label=lst:newprocbitheader]
+^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_BITDFA_H
+#define _Ü{\itshape\color{darkgreen}newModel}Ü_BITDFA_H^
+
+// Include standard headers
+^#include^ §<map>§
+
+// Include WIR headers
+^#include^ §<wir/wirtypes.h>§
+^#include^ §<analyses/bit/wirbitdfa.h>§
+
+namespace WIR {
+
+class WIR_Function;
+
+class Ü{\itshape newModel}Ü_BitDFA : public WIR_BitDFAÜ\label{lst:newprocbitheader1}Ü
+{
+  public:
+
+    // Default constructor.
+    explicit Ü{\itshape newModel}Ü_BitDFA@(@ WIR_Function æ&æ @)@;Ü\label{lst:newprocbitheader2}Ü
+
+    // Destructor.
+    virtual ~Ü{\itshape newModel}Ü_BitDFA@( void )@;Ü\label{lst:newprocbitheader3}Ü
+
+  protected:
+
+    // Performs top-down forward simulation of a given operation.
+    virtual void simulateTopDown@(@ const WIR_Operation æ&æ, ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æ,Ü\label{lst:newprocbitheader4}Ü
+                                  ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æ @)@ override;
+
+    // Performs bottom-up backward simulation of a given operation.
+    virtual void simulateBottomUp@(@ const WIR_Operation æ&æ, ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æ,Ü\label{lst:newprocbitheader5}Ü
+                                   ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æ,
+                                   ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æ @)@ override;
+};
+
+}       // namespace WIR
+
+^#endif^
+\end{lstlisting}
+
+The \texttt{simulateTopDown} forward analysis can never generate don't care bit values \texttt{bX} due to the definition of the basic operators \texttt{\&}, \texttt{|} and \texttt{\^} for class \texttt{WIR\_L4} (cf. file \texttt{WIR/analyses/bit/wirl4.cc}).
+The truth tables used by these operators only generate \texttt{bX} if at least one of its input bits is already \texttt{bX}.
+The initialization of the bit-true \gls{DFG} before the forward analysis only uses \texttt{bU}, \texttt{bL}, \texttt{bN}, \texttt{b0} or \texttt{b1}, but never \texttt{bX}.
+Thus, method \texttt{simulateTopDown} never gets \texttt{bX} bits as input and thus can never generate any \texttt{bX} bits as output.
+The goal of method \texttt{simulateBottomUp} is thus to determine don't care bits \texttt{bX}.
+If an operation \texttt{o} does not use all bits that it gets via some input register, these unused and irrelevant input bits can be set to \texttt{bX}.
+If, furthermore, the predecessor operation \texttt{p} that defines such a register now sees that it produces a value as output that is partially don't care for the rest of the following code, then these \texttt{bX} bits at \texttt{p}'s output could propagate towards \texttt{p}'s input operands.
+
+Method \texttt{simulateBottomUp} (cf. \cref{lst:bitdfaretarget2}) thus gets the operation \texttt{o} as parameter, as well as two maps that associate the IDs of \texttt{o}'s input and output parameters to their up values, resp.
+In analogy to \texttt{simulateTopDown} above, another map \texttt{results} is used to explicitly collect all newly generated up values.
+
+\begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Bit-True Data Flow Analysis},label=lst:newprocbitimpl]
+^ifdef HAVE_CONFIG_H^
+^#include^ §<config_wir.h>§
+^#endif^
+
+// Include standard headers
+^#include^ §<iterator>§
+^#include^ §<utility>§
+
+// Include WIR headers
+^#include^ §<wir/wir.h>§Ü\label{lst:newprocbitimpl1}Ü
+^#include^ §<arch/Ü{\itshape\color{orange}archDir}Ü/Ü{\itshape\color{orange}newModel}Ü.h>§Ü\label{lst:newprocbitimpl2}Ü
+
+// Include local headers
+^#include^ §"Ü{\itshape\color{orange}newModel}Übitdfa.h"§Ü\label{lst:newprocbitimpl3}Ü
+
+namespace WIR {
+
+// Default constructor.
+Ü{\itshape newModel}Ü_BitDFA::Ü{\itshape newModel}Ü_BitDFA@(@ WIR_Function æ&æf @) :@ WIR_BitDFA { f }Ü\label{lst:newprocbitimpl4}Ü
+{};
+
+// Destructor.
+Ü{\itshape newModel}Ü_BitDFA::~Ü{\itshape newModel}Ü_BitDFA@( void )@Ü\label{lst:newprocbitimpl5}Ü
+{};
+
+// Performs top-down forward simulation of a given operation.
+void Ü{\itshape newModel}Ü_BitDFA::simulateTopDown@(@ const WIR_Operation æ&æo,Ü\label{lst:newprocbitimpl6}Ü
+                                       ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æoperands,
+                                       ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æresults @)@
+{
+};
+
+// Performs bottom-up backward simulation of a given operation.
+void Ü{\itshape newModel}Ü_BitDFA::simulateBottomUp@(@ const WIR_Operation æ&æo,Ü\label{lst:newprocbitimpl7}Ü
+                                        ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æin,
+                                        ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æout,
+                                        ästd::map<äWIR_id_t, WIR_UpDownValueä>ä æ&æresults @)@
+{
+};
+
+}       // namespace WIR
+\end{lstlisting}
+
+This discussion shows that retargeting the bit-true analysis requires to provide processor-specific implementations of these two purely virtual methods \texttt{simulateTopDown} and \texttt{simulateBottomUp}.
+The following steps describe how to initially set up such a processor-specific analysis and how to integrate it into the \gls{WIR} build infrastructure:
+\begin{enumerate}
+  \item Create new directories \texttt{WIR/arch/{\itshape archDir}/analyses} and \texttt{WIR/arch/{\itshape archDir}/analyses/bit}.
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/analyses/Makefile.src| \\
+  to the beginning of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Definition of Lambdas for Top-Down Analysis},label=lst:topDownLambdas1]
+void Ü{\itshape newModel}Ü_BitDFA::simulateTopDown@(@ Ü{\itshape\color{gray} [...]}Ü @)@
+{
+  // firstOp retrieves the down value of operation o's first explicit parameter from map operands.
+  auto firstOp æ= [&]æ@( void )@ æ->æ WIR_UpDownValue æ&æ {Ü\label{lst:topDownLambdas11}Ü
+    auto æ&æp = o.getExplicitParameters@()@.front@()@.get@()@;Ü\label{lst:topDownLambdas12}Ü
+
+    // Get down value from map operands, update it to the correct bit width needed by parameter p.
+    auto æ&æv = operands.at@(@ p.getID@() )@;Ü\label{lst:topDownLambdas13}Ü
+    updateOperand@(@ p, v @)@;Ü\label{lst:topDownLambdas14}Ü
+
+    return@(@ v @)@;Ü\label{lst:topDownLambdas15}Ü
+  };
+
+  // lastOp retrieves the down value of operation o's last explicit parameter from map operands.
+  auto lastOp æ= [&]æ@( void )@ æ->æ WIR_UpDownValue æ&æ {Ü\label{lst:topDownLambdas16}Ü
+    auto æ&æp = o.getExplicitParameters@()@.back@()@.get@()@;
+
+    // Get down value from map operands, update it to the correct bit width needed by parameter p.
+    auto æ&æv = operands.at@(@ p.getID@() )@;
+    updateOperand@(@ p, v @)@;
+
+    return@(@ v @)@;
+  };
+
+  // nthOp retrieves the down value of operation o's n-th explicit parameter from map operands.
+  auto nthOp æ= [&]æ@( unsigned int@ n @)@ æ->æ WIR_UpDownValue æ&æ {Ü\label{lst:topDownLambdas17}Ü
+    auto it = o.getExplicitParameters@()@.begin@()@;
+    ästd::advanceä@(@ it, n @)@;
+
+    // Get down value from map operands, update it to the correct bit width needed by n-th parameter.
+    auto æ&æv = operands.at@(@ it->get@()@.getID@() )@;
+    updateOperand@(@ it->get@()@, v @)@;
+
+    return@(@ v @)@;
+  };
+
+  [...]
+};
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/analyses/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+include arch/Ü{\itshape archDir}Ü/analyses/bit/Makefile.src
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES        += arch/Ü{\itshape archDir}Ü/analyses/bit/Ü{\itshape newModel}Übitdfa.cc arch/Ü{\itshape archDir}Ü/analyses/bit/Ü{\itshape newModel}Übitdfa.h
+\end{lstlisting}
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/{\itshape newModel}bitdfa.h} according to the general structure depicted in \cref{lst:newprocbitheader}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/{\itshape newModel}bitdfa.cc} according to the general structure depicted in \cref{lst:newprocbitimpl}.
+\end{enumerate}
+
+As motivated earlier, method \texttt{simulateTopDown} heavily uses maps \texttt{operands} and \texttt{results} to manage the down values during forward analysis.
+Efficient access to these down values and their associated registers is thus crucial.
+For this purpose, \texttt{simulateTopDown} usually defines a few lambdas that encapsulate the access to these maps.
+
+\begin{lstlisting}[style=code,float=!t,caption={Definition of Lambdas for Top-Down Analysis (ctd.)},label=lst:topDownLambdas2]
+void Ü{\itshape newModel}Ü_BitDFA::simulateTopDown@(@ Ü{\itshape\color{gray} [...]}Ü @)@
+{
+  [...]
+
+  // lastReg retrieves the register associated with operation o's last explicit parameter.
+  auto lastReg æ= [&]æ@( void )@ æ->æ WIR_BaseRegister æ&æ {Ü\label{lst:topDownLambdas21}Ü
+    const auto æ&ærp = dynamic_castæ<æconst WIR_RegisterParameter æ&>æ@(@ o.getExplicitParameters@()@.back@()@.get@() )@;
+    return@(@ rp.getRegister@() )@;
+  };
+
+  // nthReg retrieves the register associated with operation o's n-th explicit parameter.
+  auto nthReg æ= [&]æ@( unsigned int@ n @)@ æ->æ WIR_BaseRegister æ&æ {Ü\label{lst:topDownLambdas22}Ü
+    auto it = o.getExplicitParameters@()@.begin@()@;
+    ästd::advanceä@(@ it, n @)@;
+    return@(@ dynamic_castæ<æconst WIR_RegisterParameter æ&>æ@(@ it->get@() )@.getRegister@() )@;
+  };
+
+  // nthRes retrieves the down value of operation o's n-th explicit parameter from map results.
+  auto nthRes æ= [&]æ@( unsigned int@ n @)@ æ->æ WIR_UpDownValue æ&æ {Ü\label{lst:topDownLambdas23}Ü
+    auto it = o.getExplicitParameters@()@.begin@()@;
+    ästd::advanceä@(@ it, n @)@;
+
+    // Check presence of n-th parameter in map results. Create U* if not yet present.
+    auto resIt = results.find@(@ it->get@()@.getID@() )@;
+    if @(@ resIt == results.end@() )@
+      resIt =
+        results.insert@(@
+          { it->get@()@.getID@()@,
+            { WIR_L4::bU,
+              dynamic_castæ<æWIR_RegisterParameter æ&>æ@(@
+                it->get@() )@.getRegister@()@.getBitWidth@()@ } } @)@.first;
+
+    return@(@ resIt->second @)@;
+  };
+};
+\end{lstlisting}
+
+\begin{enumerate}[resume]
+  \item Extend method \texttt{simulateTopDown} of file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/{\itshape newModel}bitdfa.cc} by the lambdas as shown in \cref{lst:topDownLambdas1,lst:topDownLambdas2}.Ü\label{enum:topDownLambdas}Ü
+
+  \texttt{firstOp} (cf. \cref{lst:topDownLambdas11} of \cref{lst:topDownLambdas1}) provides a reference to that down value of map \texttt{operands} that is associated with the first explicit parameter of operation \texttt{o}.
+  For this purpose, it retrieves this first parameter (\cref{lst:topDownLambdas12}) and looks its unique ID up in map \texttt{operands} (\cref{lst:topDownLambdas13}).
+  In the presence of hierarchical registers, it can happen that the obtained down value has a larger width than that of the currently considered parameter's register.
+  The use of \texttt{updateOperand} in \cref{lst:topDownLambdas14} helps here and ensures that the down value has an appropriate width afterwards.
+  This updated down value is then finally returned.
+
+  In a similar manner, \texttt{lastOp} (\cref{lst:topDownLambdas16}) and \texttt{nthOp} (\cref{lst:topDownLambdas17}) can be used to get references to the down values of the operation's very last or \emph{n}-th explicit parameter.
+
+  During top-down analysis, it will often be necessary to also check the actual registers serving as parameters of operation \texttt{o}.
+  For this purpose, \texttt{lastReg} (cf. \cref{lst:topDownLambdas21} of \cref{lst:topDownLambdas2}) and \texttt{nthReg} (\cref{lst:topDownLambdas22}) provide references to the registers used as very last or \emph{n}-th explicit parameter of an operation.
+
+  Finally, \texttt{nthRes} (\cref{lst:topDownLambdas23}) returns a reference to some new down value from map \texttt{results} that is produced by operation \texttt{o} via its \emph{n}-th explicit parameter.
+  If map \texttt{results} does not yet contain an entry for this \emph{n}-th parameter, the lambda creates and returns one that only contains unknown \texttt{bU} bits.
+  \begin{wirWarn}
+    At no place, the lambdas shown in \cref{lst:topDownLambdas1,lst:topDownLambdas2} perform any kind of safety checks for efficiency reasons.
+    They assume that an operation actually has a first, last or \emph{n}-th explicit parameter, they rely on the presence of some entry in map \texttt{operands} in \cref{lst:topDownLambdas1}, and they also assume in \cref{lst:topDownLambdas2} that the operation's parameters actually are register parameters.
+
+    The code of the top-down analysis still to be developed thus has to make sure that these lambdas are used only in appropriate contexts for correct opcodes and operation formats featuring the desired numbers and positions of (register) parameters.
+  \end{wirWarn}
+
+  \item Using the lambdas defined in the previous step, the main realization of method \texttt{simulateTopDown} can follow next.
+  Basically, the body of this method consists of a sequence of if-conditions that, one after the other, check the opcode and possibly the operation format of the current operation \texttt{o}.
+  And depending on \texttt{o}'s opcode (and format), the bit-true effects of the operation are computed.
+
+  Obviously, this document cannot cover all possible situations that might need to be considered during the implementation of method \texttt{simulateTopDown}.
+  Instead, the following paragraphs simply focus on the most relevant classes of machine operations and their bit-true forward analysis.
+  Code snippets from the RISC-V implementation (see file \texttt{WIR/arch/riscv/analyses/bit/rv32bitdfa.cc}) will serve as examples.
+
+  The most simple operations to be modeled in a bit-true way regularly are \emph{move operations} that copy one register's contents to another register.
+  Assuming the RISC-V RV32IC operation C.MV as example, its top-down analysis looks as follows: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32IC::OpCode::CMV @)@
+  nthRes@(@ §0§ @)@ = lastOp@()@;
+\end{lstlisting}
+  \\
+  Lambda \texttt{lastOp} is used to obtain the down value of the register to be copied, and this down value is simply assigned to the target register using \texttt{nthRes}.
+
+  Another very straightforward class of operations to be modeled in a bit-true way are the \emph{bitwise logical operations} such as AND, OR, XOR or NOT.
+  Their simplicity arises from the fact that these bitwise operations have a one-to-one conformance with the very same operators defined for the partial order \texttt{WIR\_L4} and also for bit vectors modeled by class \texttt{WIR\_UpDownValue}.
+  The top-down analysis of the RISC-V bitwise AND operation thus boils down to: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::AND @)@ {
+  nthRes@(@ §0§ @)@ = nthOp@(@ §1§ @)@ æ&æ lastOp@()@;
+  nthRes@(@ §0§ @)@.setSignedness@(@ false @)@;
+}
+\end{lstlisting}
+  \\
+  The down value of the second register parameter of the AND is obtained using \texttt{nthOp} (note that parameter counting starts with number 0), and \texttt{lastOp} provides the down value of the third register parameter.
+  Both down values are combined using \texttt{WIR\_UpDownValue::operator \&}, and its result is stored using \texttt{nthRes} so that it gets associated with the first register parameter of the AND.
+  Bitwise machine operations usually treat all operands and results as unsigned values so that the signedness of the resulting down value produced above is explicitly reset.
+
+  The handling of immediates during top-down analysis can also be exemplified nicely using the RISC-V ANDI operation: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::ANDI @)@ {
+  auto æ&æimm = lastOp@()@;
+  imm.setSignedness@()@;
+  nthRes@(@ §0§ @)@ = nthOp@(@ §1§ @)@ æ&æ imm.extend@(@ §32§ @)@;
+  nthRes@(@ §0§ @)@.setSignedness@(@ false @)@;
+}
+\end{lstlisting}
+  \\
+  Here, \texttt{lastOp} gives a reference to the immediate's down value which, according to the RISC-V specification, is 12 bits wide.
+  The \gls{ISA} specification furthermore states that this immediate gets sign-extended before applying the bitwise operation itself.
+  For this purpose, the immediate's down value needs to be set to signed and then extended to 32 bits.
+  The rest is equivalent to the AND operation above.
+  Other bitwise operations can be modeled in analogy to these two examples.
+
+  \emph{Loading constants} of immediate parameters into a register is another rather simple task to be modeled in a bit-true fashion.
+  The following code realizes the top-down analysis of the RISC-V LUI operation when it receives a 20 bits wide immediate parameter: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::LUI @)@ {
+  if @(@ o.getOperationFormat@()@ == RV32I::OperationFormat::RC20_1 @)@
+    nthRes@(@ §0§ @)@ = lastOp@()@.extend@(@ §32§ @)@ << §12§;
+  [...]
+}
+\end{lstlisting}
+  \\
+  The down value of the immediate parameter is extended to 32 bits first.
+  The resulting value is then left-shifted using the \texttt{<{}<} operator of class \texttt{WIR\_UpDownValue} so that the least-significant 12 bits are filled with \texttt{b0}.
+  The LUI's immediate then resides in the most-significant 20 bits, and this value is finally stored using \texttt{nthRes}.
+
+  The LUI operation also serves as a good example for operations that support labels as parameter.
+  In this case, the most-significant 20 bits of an assembly label are loaded into a target register.
+  This behavior can be modeled for top-down analysis as follows: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::LUI @)@ {
+  [...]
+  else {
+    auto &label = dynamic_castæ<æWIR_LabelParameter æ&>æ@(@ o.getExplicitParameters@()@.back@()@.get@() )@;
+
+    if @( (@ label.getLabelType@()@ == WIR_SymbolType::data @)@ ||
+         @(@ label.getLabelType@()@ == WIR_SymbolType::function @) )@ {
+      const auto æ&æf = o.getInstruction@()@.getBasicBlock@()@.getFunction@()@;
+      const auto æ&æsys = f.getCompilationUnit@()@.getSystem@()@;
+      auto æ&æsym =
+        label.getLabelType@()@ == WIR_SymbolType::data æ?æ
+          sys.findSymbol@(@ label.getData@() )@ æ:æ sys.findSymbol@(@ label.getFunction@() )@;
+
+      nthRes@(@ §0§ @)@.setAllBits@(@ WIR_L4::b0 @)@;
+      for @( unsigned int@ i = §12§; i < §32§; ++i @)@
+        nthRes@(@ §0§ @)@.setBit@(@ i, WIR_L4::bL, { sym, i } @)@;
+    }
+  }
+}
+\end{lstlisting}
+  \\
+  Here, the label is retrieved from the operation first. For the RISC-V LUI operation, a label may refer either to a data object or to a function.
+  Depending on this, the symbol to which the label refers is retrieved from the \gls{WIR} system.
+  After that, all bits of the LUI's result register are set to \texttt{b0}.
+  And the most-significant 20 bits of the result register are finally set to \texttt{bL} such that each bit \emph{i} of the resulting down value refers to the location given by the \emph{i}-th bit of the symbol.
+
+  \emph{Shifting} register contents is again simple to model in a bit-true way, as the following example for the logical left-shift of RISC-V shows: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::SLL @)@ {
+  auto shamt = lastOp@()@.extract@(@ §0§, §5§ @)@;
+  shamt.setSignedness@(@ false @)@;
+
+  // Enforce logical shifting.
+  auto æ&æa = nthOp@(@ §1§ @)@;
+  a.setSignedness@(@ false @)@;
+
+  nthRes@(@ §0§ @)@ = a << shamt;
+}
+\end{lstlisting}
+  \\
+  In this example, the least-significant 5 bits of the last parameter of SLL are extracted first, as only they encode the shift amount.
+  Since SLL realizes a logical left-shift, it is important to explicitly set the parameter \texttt{nthOp( 1 )} to be shifted to unsigned.
+  After that, the operand register can simply be shifted by the shift amount, and the result is stored as down value associated with the result register.
+
+  Right-shifts usually distinguish between logical and arithmetical shifts which requires consideration also in the top-down analysis: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @( (@ o.getOpCode@()@ == RV32I::OpCode::SRA @)@ || @(@ o.getOpCode@()@ == RV32I::OpCode::SRL @) )@ {
+  auto shamt = lastOp@()@.extract@(@ §0§, §5§ @)@;
+  shamt.setSignedness@(@ false @)@;
+
+  // Enforce arithmetical/logical shifting.
+  auto æ&æa = nthOp@(@ §1§ @)@;
+  a.setSignedness@(@ o.getOpCode@()@ == RV32I::OpCode::SRA @)@;
+
+  nthRes@(@ §0§ @)@ = a >> shamt;
+}
+\end{lstlisting}
+  \\
+  In the above code example, the down value of the register parameter to be shifted is either set to signed or unsigned depending of the shift's opcode.
+  This way, the \texttt{>{}>} operator of class \texttt{WIR\_UpDownValue} can precisely determine which style of shift to apply.
+
+  The bit-true modelling of standard \emph{integer arithmetical operations} is similarly simple as most of these operations are already provided as operators of class \texttt{WIR\_UpDownValue}.
+  Thus, an integer addition for the ongoing RISC-V example boils down to: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::ADD @)@ {
+  nthRes@(@ §0§ @)@ = nthOp@(@ §1§ @)@ + lastOp@()@;
+  nthRes@(@ §0§ @)@.setSignedness@()@;
+}
+\end{lstlisting}
+  \\
+  In analogy to this previous example, machine operations for integer subtraction, multiplication, division and modulo can be modeled for bit-true forward analysis.
+
+  Likewise, \emph{integer comparison} operators of down values are also provided by class \texttt{WIR\_UpDownValue} which facilitates the modelling of machine operations for greater-equal, less-than and other similar operations.
+  The following example shows the realization of the RISC-V SLT and SLTU less-than comparisons, once signed and once unsigned, resp.:
+
+  \clearpage
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+if @( (@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@ || @(@ o.getOpCode@()@ == RV32I::OpCode::SLTU @) )@ {
+  auto æ&æa = nthOp@(@ §1§ @)@;
+  a.setSignedness@(@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@;
+  auto æ&æb = lastOp@()@;
+  b.setSignedness@(@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@;
+
+  nthRes@(@ §0§ @)@ = { WIR_L4::b0, §32§, false };
+  nthRes@(@ §0§ @)[@ §0§ @]@ = @(@ a < b @)@;
+}
+\end{lstlisting}
+
+  The important point here is to explicitly set or reset the signedness of the operands' down values, depending on whether a signed or unsigned comparison is desired.
+  For many architectures, such operations produce a Boolean result in the target register where all bits are cleared and only the least-significant bit contains the binary comparison result.
+  This behavior is mimiced in the above example where the result's down value is completely set to \texttt{b0} first, and only its bit 0 is set to the comparison result.
+
+  The bit-true data flow analysis is not able to analyze the contents of memory addresses.
+  Due to this, operations performing a \emph{memory load} are regularly not modeled in the top-down analysis, because they only generate unknown \texttt{bU} bits by default.
+  The only exception here are loads that load an unsigned quantity that is smaller than the machine's bit width.
+  Usually, this applies for operations loading an unsigned byte or halfword.
+  These quantities usually get zero-extended after being loaded so that it is known a priori that such load operations only produce zero \texttt{b0} bits in the most-significant positions.
+  This behavior is modeled for the RISC-V LBU (load byte unsigned) operation in the following example: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::LBU @)@ {
+  // Least-significant 8 bits are unknown, most-significant bits are all 0.
+  nthRes@(@ §0§ @)@ = { WIR_L4::b0, §32§, false };
+  WIR_UpDownValue u { WIR_L4::bU, §8§, false };
+  insert@(@ nthRes@(@ §0§ @)@, u, §0§ @)@;
+}
+\end{lstlisting}
+  \\
+  As can be seen, only the least-significant 8 bits are unknown here, while the rest is set to \texttt{b0}.
+
+  \emph{Store operations} are usually a sink in the data flow graph that have no outgoing edges.
+  For this reason, they usually don't have to be modeled for top-down analysis.
+  All other classes of machine operations need to be analyzed carefully in terms of their bitwise behavior.
+  If this behavior is clear and can somehow be broken down to the fundamental operators of class \texttt{WIR\_UpDownValue}, a bit-true modelling of operations not mentioned here is possible.
+  The careful analysis of each operation's bitwise semantics as well as of the crucial header file \texttt{WIR/analyses/bit/wirupdownvalue.h} is indispensable, though.
+\end{enumerate}
+
+As last step for retargeting the bit-true \gls{DFA} of \gls{WIR}, the backward analysis needs to be implemented.
+Similar to the top-down simulation, method \texttt{simulateBottomUp} makes use of a few lambdas for the efficient access to maps \texttt{in} and \texttt{out}.
+
+\begin{enumerate}[resume]
+  \item Extend method \texttt{simulateBottomUp} of file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/{\itshape newModel}bitdfa.cc} by the lambdas as shown in \cref{lst:bottomUpLambdas1,lst:bottomUpLambdas2}.
+
+  The up values along all incoming \gls{DFG} edges of an operation are stored in map \texttt{in}, while the up values of all outgoing edges reside in map \texttt{out}.
+  The lambdas from \cref{lst:bottomUpLambdas1,lst:bottomUpLambdas2} provide simple access to these incoming and outgoing up values.
+  Since they are extremely similar to the lambdas used during top-down analysis (cf. \cref{enum:topDownLambdas} above), we omit their detailed discussion here.
+  The only difference that is worthwhile mentioning is that the bottom-up lambdas all return a pair consisting of the unique ID of the operation's parameter and a pointer to its associated up value.
+
+  \item Using the lambdas defined in the previous step, the main realization of method \texttt{simulateBottomUp} can follow next.
+  Again, the body of this method consists of a sequence of if-conditions that, one after the other, check the opcode and possibly the operation format of the current operation \texttt{o}.
+  And depending on \texttt{o}'s opcode (and format), the bottom-up simulation determines which bits of incoming up values can be set to don't care \texttt{bX}.
+  The resulting up values including such \texttt{bX} bits are stored in map \texttt{results}.
+
+  Obviously, this document cannot cover all possible situations that might need to be considered during the implementation of method \texttt{simulateBottomUp}.
+  Instead, the following paragraphs simply focus on the most relevant classes of machine operations and their bit-true backward analysis.
+  Code snippets from the RISC-V implementation (see file \texttt{WIR/arch/riscv/analyses/bit/rv32bitdfa.cc}) will serve as examples.
+
+\begin{lstlisting}[style=code,float=!t,caption={Definition of Lambdas for Bottom-Up Analysis},label=lst:bottomUpLambdas1]
+void Ü{\itshape newModel}Ü_BitDFA::simulateBottomUp@(@ Ü{\itshape\color{gray} [...]}Ü @)@
+{
+  // firstIn retrieves the incoming up value of operation o's first explicit parameter from map in.
+  auto firstIn æ= [&]æ@( void )@ æ->æ ästd::pairäæ<æWIR_id_t, WIR_UpDownValue *ä>ä {Ü\label{lst:bottomUpLambdas11}Ü
+    auto æ&æp = o.getExplicitParameters@()@.front@()@.get@()@;
+
+    // Get up value from map in, update it to the correct bit width needed by parameter p.
+    auto æ&æv = in.at@(@ p.getID@() )@;
+    updateOperand@(@ p, v @)@;
+
+    return@(@ ästd::make_pairä@(@ p.getID@()@, &v @) )@;
+  };
+
+  // lastIn retrieves the incoming up value of operation o's last explicit parameter from map in.
+  auto lastIn æ= [&]æ@( void )@ æ->æ ästd::pairäæ<æWIR_id_t, WIR_UpDownValue *ä>ä {Ü\label{lst:bottomUpLambdas12}Ü
+    auto æ&æp = o.getExplicitParameters@()@.back@()@.get@()@;
+
+    // Get up value from map in, update it to the correct bit width needed by parameter p.
+    auto æ&æv = in.at@(@ p.getID@() )@;
+    updateOperand@(@ p, v @)@;
+
+    return@(@ ästd::make_pairä@(@ p.getID@()@, &v @) )@;
+  };
+
+  // nthIn retrieves the incoming up value of operation o's n-th explicit parameter from map in.
+  auto nthIn æ= [&]æ@( unsigned int@ n @)@ æ->æ ästd::pairäæ<æWIR_id_t, WIR_UpDownValue *ä>ä {Ü\label{lst:bottomUpLambdas13}Ü
+    auto it = o.getExplicitParameters@()@.begin@()@;
+    ästd::advanceä@(@ it, n @)@;
+
+    // Get up value from map in, update it to the correct bit width needed by parameter p.
+    auto æ&æv = in.at@(@ it->get@()@.getID@() )@;
+    updateOperand@(@ it->get@()@, v @)@;
+
+    return@(@ ästd::make_pairä@(@ it->get@()@.getID@()@, &v @) )@;
+  };
+
+  [...]
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!t,caption={Definition of Lambdas for Bottom-Up Analysis (ctd.)},label=lst:bottomUpLambdas2]
+void Ü{\itshape newModel}Ü_BitDFA::simulateBottomUp@(@ Ü{\itshape\color{gray} [...]}Ü @)@
+{
+  [...]
+
+  // firstOut retrieves the outgoing up value of operation o's first explicit parameter from map out.
+  auto firstOut æ= [&]æ@( void )@ æ->æ ästd::pairäæ<æWIR_id_t, WIR_UpDownValue *ä>ä {Ü\label{lst:bottomUpLambdas21}Ü
+    auto æ&æp = o.getExplicitParameters@()@.front@()@.get@()@;
+
+    // Get up value from map out, update it to the correct bit width needed by parameter p.
+    auto æ&æv = out.at@(@ p.getID@() )@;
+    updateOperand@(@ p, v @)@;
+
+    return@(@ ästd::make_pairä@(@ p.getID@()@, &v @) )@;
+  };
+
+  // nthOut retrieves the outgoing up value of operation o's n-th explicit parameter from map out.
+  auto nthOut æ= [&]æ@( unsigned int@ n @)@ æ->æ ästd::pairäæ<æWIR_id_t, WIR_UpDownValue *ä>ä {Ü\label{lst:bottomUpLambdas22}Ü
+    auto it = o.getExplicitParameters@()@.begin@()@;
+    ästd::advanceä@(@ it, n @)@;
+
+    // Get up value from map out, update it to the correct bit width needed by parameter p.
+    auto æ&æv = out.at@(@ it->get@()@.getID@() )@;
+    updateOperand@(@ it->get@()@, v @)@;
+
+    return@(@ ästd::make_pairä@(@ it->get@()@.getID@()@, &v @) )@;
+  };
+
+  [...]
+};
+\end{lstlisting}
+
+  The most simple phenomenon to be considered during bottom-up simulation is the backward propagation of \texttt{bX} bits from an operation's outgoing up value(s) to its incoming ones.
+  This refers to a situation where it turned out that some outputs produced by operation \texttt{o} do not care.
+  If \texttt{o} produces a result that is (partially) irrelevant, then it is very likely that also some bits of \texttt{o}'s inputs don't care.
+  This concept motivates why the bit-true bottom-up simulation is part of a backwards \gls{DFA}, since the \texttt{bX} bits in general propagate against the sense of the \gls{DFG}'s edges from a node's outputs to its inputs.
+  A \emph{move operation} is again the most simple example illustrating this idea. The bottom-up simulation of the RISC-V RV32IC's C.MV operation looks as follows: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32IC::OpCode::CMV @)@ {
+  auto æ&æoutUp = *@(@firstOut@()@.second@)@;
+  auto in1 = lastIn@()@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+
+  for @( unsigned int@ i = §0§; i < outUp.getBitWidth@()@; ++i @)@
+    if @(@ outUp.at@(@ i @)@ == WIR_L4::bX @)@
+      inUp1.setBit@(@ i, WIR_L4::bX @)@;
+
+  results.insert@(@ { in1.first, inUp1 } @)@;
+}
+\end{lstlisting}
+  \\
+  The up value of the target register which is the only output of a move is retrieved first.
+  Next, the last parameter of the move being its only input is used to obtain its respective up value.
+  As a move copies its input to the output register, don't care bits showing up at the output's up value thus are also don't care for the move's input.
+  This backward propagation is realized by the above for-loop that sets individual input bits to \texttt{bX} if the bit at the same position of the output is already don't care.
+  Finally, the up value obtained this way is stored in map \texttt{results} under the input parameter's unique ID.
+
+  Besides this backward propagation of don't care bits, certain operations can generate \texttt{bX} bits on their own.
+  Prime example here is a \emph{bitwise logical} AND operation.
+  Here, any zero \texttt{b0} bit in one of its input parameters has the effect that the corresponding bit of the other input does not care, since 0 AND \emph{<something>} is always 0 -- irrespective of the other bit value.
+  This behavior, combined with the already discussed backward propagation, is illustrated in the following RISC-V code example: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::AND @)@ {
+  auto æ&æoutUp = *@(@firstOut@()@.second@)@;
+  auto in1 = nthIn@(@ §1§ @)@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+  auto in2 = lastIn@()@;
+  auto æ&æinUp2 = *@(@in2.second@)@;
+
+  for @( unsigned int@ i = §0§; i < outUp.getBitWidth@()@; ++i @)@ {
+    if @(@ inUp2.at@(@ i @)@ == WIR_L4::b0 @)@
+      inUp1.setBit@(@ i, WIR_L4::bX @)@;
+    else
+
+    if @(@ inUp1.at@(@ i @)@ == WIR_L4::b0 @)@
+      inUp2.setBit@(@ i, WIR_L4::bX @)@;
+
+    if @(@ outUp.at@(@ i @)@ == WIR_L4::bX @)@ {
+      inUp1.setBit@(@ i, WIR_L4::bX @)@;
+      inUp2.setBit@(@ i, WIR_L4::bX @)@;
+    }
+  }
+
+  results.insert@(@ { in1.first, inUp1 } @)@;
+  results.insert@(@ { in2.first, inUp2 } @)@;
+}
+\end{lstlisting}
+  \\
+  This code first checks for a \texttt{b0} bit in the last input's up value and then sets the same bit of the first input to \texttt{bX}.
+  Otherwise, the symmetric approach is applied and a bit of the second input is set to \texttt{bX} if the same bit of the first input is \texttt{b0}.
+  In addition to this, both inputs' bits at position \emph{i} are set to don't care if the \emph{i}-th bit of the operation's output is already \texttt{bX}.
+
+  A similar approach can be applied for the bitwise OR where a \texttt{b1} bit in one input sets its partner bit of the other input to \texttt{bX}.
+
+  For \emph{shift operations}, the potential to generate don't cares during bottom-up analysis is also quite large.
+  This is because those input bits that get shifted out can obviously be set to \texttt{bX}, in addition to backward propagation again.
+  The following code shows the bottom-up analysis of the RISC-V SLLI operation: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::SLLI @)@ {
+  auto æ&æoutUp = *@(@firstOut@()@.second@)@;
+  auto in1 = nthIn@(@ §1§ @)@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+  auto æ&æshamtUp = *@(@lastIn@()@.second@)@;
+
+  for @( unsigned int@ i = §1§; i <= shamtUp.getSignedValue@()@; ++i @)@
+    inUp1.setBit@(@ inUp1.getBitWidth@()@ - i, WIR_L4::bX @)@;
+
+  for @( unsigned int@ i = shamtUp.getSignedValue@()@; i < outUp.getBitWidth@()@; ++i @)@
+    if @(@ outUp.at@(@ i @)@ == WIR_L4::bX @)@
+      inUp1.setBit@(@ i - shamtUp.getSignedValue@()@, WIR_L4::bX @)@;
+
+  results.insert@(@ { in1.first, inUp1 } @)@;
+}
+\end{lstlisting}
+  \\
+  The first for-loop sets the input's most-significant bits that get shifted out to \texttt{bX}.
+  And the second loop realizes the backward propagation, but here under consideration of the left-shift such that a \texttt{bX} in output bit \emph{i} propagates backwards to input bit \emph{i - <shift amount>}.
+
+  For \emph{integer arithmetical operations} such as additions or subtractions,
+  backward propagation is not as simple as in all the previous examples.
+  This is due to the fact that two input bits at position \emph{i} to be added/subtracted do not affect output bit \emph{i} in isolation.
+  In the case of a carry-over, output bit \emph{i}+1 might also be affected.
+  If such a carry-over furthermore ripples onwards through the most-significant bit positions, then all bits from position \emph{i} to the most-significant bit might be affected.
+
+  Thus, only if all the most-significant output bits from position \emph{i} on are all \texttt{bX}, it is safe to set all bits of both inputs from \emph{i} on to don't care.
+  This is shown in the following example for the RISC-V ADD operation: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::ADD @)@ {
+  auto æ&æoutUp = *@(@firstOut@()@.second@)@;
+  auto in1 = nthIn@(@ §1§ @)@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+  auto in2 = lastIn@()@;
+  auto æ&æinUp2 = *@(@in2.second@)@;
+
+  for @( unsigned int@ i = outUp.getBitWidth@()@ - §1§; @(@ i >= §0§ @)@ && @(@ outUp[ i ] == WIR_L4::bX @)@; --i @)@ {
+    inUp1.setBit@(@ i, WIR_L4::bX @)@;
+    inUp2.setBit@(@ i, WIR_L4::bX @)@;
+  }
+
+  results.insert@(@ { in1.first, inUp1 } @)@;
+  results.insert@(@ { in2.first, inUp2 } @)@;
+}
+\end{lstlisting}
+  \\
+  Here, the for-loop scans the output bits for don't cares beginning with the most-significant position.
+  As long as \texttt{bX} bits are found in the output, the corresponding most-significant input bits are set to \texttt{bX} and the loop continues.
+  The very same approach can be applied to integer subtractions.
+
+  \emph{Integer comparisons} that produce only a Boolean value in the output's least-significant bit are simple to model for bottom-up analysis.
+  If this least-significant output bit turns out to be irrelevant, then all bits of both inputs that are compared do not care, as shown in the below example for the RISC-V SLT comparison: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@ {
+  auto æ&æoutUp = *@(@firstOut@()@.second@)@;
+  auto in1 = nthIn@(@ §1§ @)@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+  auto in2 = lastIn@()@;
+  auto æ&æinUp2 = *@(@in2.second@)@;
+
+  if @(@ outUp.at@(@ §0§ @)@ == WIR_L4::bX @)@ {
+    inUp1.setAllBits@(@ WIR_L4::bX @)@;
+    inUp2.setAllBits@(@ WIR_L4::bX @)@;
+  }
+
+  results.insert@(@ { in1.first, inUp1 } @)@;
+  results.insert@(@ { in2.first, inUp2 } @)@;
+}
+\end{lstlisting}
+  \\
+  \emph{Conditional branches} usually do not produce any visible result in some output register.
+  But in certain situations, the branch condition can be exploited and don't cares be generated.
+  If, e.g., for a branch-if-equal operation the analysis turns out that the branch condition is definitely not met, then it is sufficient to find one bit position where both inputs definitely differ.
+  All other bits of both inputs can safely be set to \texttt{bX}, as shown in the following example for the RISC-V BEQ operation: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::BEQ @)@ {
+  auto in1 = firstIn@()@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+  auto in2 = nthIn@(@ §1§ @)@;
+  auto æ&æinUp2 = *@(@in2.second@)@;
+
+  // Compare input up values for equality.
+  auto cmp = @(@ inUp1 == inUp2 @)@;
+
+  if @(@ cmp == WIR_L4::b0 @)@ {
+    // The comparison definitely is false. Determine bit position where inputs differ.
+    unsigned int i = §0§;
+
+    for @(@ ; i < inUp1.getBitWidth@()@; ++i @)@
+      if @( (@ getLevel@(@ inUp1[ i ] @)@ == §2§ @)@ && @(@ getLevel@(@ inUp2[ i ] @)@ == §2§ @)@ &&
+           @(@ inUp1[ i ] != inUp2[ i ] @) )@
+        break;
+      else
+
+      if @( (@ getLevel@(@ inUp1[ i ] @)@ == §1§ @)@ && @(@ getLevel@(@ inUp2[ i ] @)@ == §1§ @)@ &&
+           @(@ inUp1[ i ] != inUp2[ i ] @)@ && @(@ inUp1.getLocation@(@ i @)@ == inUp2.getLocation@(@ i @) ) )@
+        break;
+      else {
+        inUp1.setBit@(@ i, WIR_L4::bX @)@;
+        inUp2.setBit@(@ i, WIR_L4::bX @)@;
+      }
+
+    for @(@ ++i; i < inUp1.getBitWidth@()@; ++i @)@ {
+      inUp1.setBit@(@ i, WIR_L4::bX @)@;
+      inUp2.setBit@(@ i, WIR_L4::bX @)@;
+    }
+
+    results.insert@(@ { in1.first, inUp1 } @)@;
+    results.insert@(@ { in2.first, inUp2 } @)@;
+  }
+}
+\end{lstlisting}
+  \\
+  First, the branch's condition is evaluated by applying the \texttt{==} operator of class \texttt{WIR\_UpDownValue}.
+  This operator returns \texttt{b1} if both compared operands are provably equal, \texttt{b0} if they both are provably inequal, and \texttt{bU} otherwise.
+  If both operands definitely are inequal, one bit position is determined where both inputs provably are inequal.
+  This is the case either if bit \emph{i} of one input is \texttt{b0} and the same bit of the other input is \texttt{b1}, or vice versa.
+  Or otherwise, if the one bit is \texttt{bL} and the other \texttt{bN}, and both refer to the very same location.
+  These two cases are tested in the above code, and all bits except at this differing bit positions are set to \texttt{bX}.
+
+  For \emph{store operations} saving half-words or bytes into memory, the most-significant bits that do not belong to the stored half-word/byte are obviously don't care.
+  The following example shows the bottom-up analysis of the RISC-V SB operation: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+if @(@ o.getOpCode@()@ == RV32I::OpCode::SB @)@ {
+  auto in1 = firstIn@()@;
+  auto æ&æinUp1 = *@(@in1.second@)@;
+
+  // The most-significant 24 bits are X.
+  for @( unsigned int@ i = §8§; i < inUp1.getBitWidth@()@; ++i @)@
+    inUp1.setBit@(@ i, WIR_L4::bX @)@;
+
+  results.insert@(@ { in1.first, inUp1 } @)@;
+}
+\end{lstlisting}
+\end{enumerate}
+
+\cleardoubleoddpage

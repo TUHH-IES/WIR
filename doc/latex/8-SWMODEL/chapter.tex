@@ -1,0 +1,1085 @@
+%=========================================================================
+\chapter{The WIR Software Model}
+\label{chap:swmodel}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+This chapter describes and specifies the \gls{API} of all classes that serve to model software in some \gls{WIR} system.
+Thus, the subsequent \crefrange{sec:compilationunits}{sec:parameters} focus in detail on the complete hierarchy from compilation units down to parameters as depicted in \cref{fig:swmodel}.
+Furthermore, \cref{sec:data} introduces the key concepts of data objects within \gls{WIR}.
+
+
+%-------------------------------------------------------------------------
+\section{Compilation Units}
+\label{sec:compilationunits}
+%-------------------------------------------------------------------------
+
+Class \texttt{WIR\_CompilationUnit} is the generic representation of code files.
+As such, its primary purpose is to manage a list of \gls{WIR} functions that are part of a compilation unit.
+All list operations from \cref{chap:lists} like, e.g., \texttt{WIR\_CompilationUnit::pushBackFunction} are provided by class \texttt{WIR\_CompilationUnit}.
+
+Construction of compilation units can be achieved using the constructors shown in \cref{lst:cuconstruction}.
+The default constructor (cf. \cref{lst:cuconstr1}) creates an empty compilation unit without any functions, while the variadic constructor (cf.  \cref{lst:cuconstr2}) can be used to create an object with an arbitrary amount of functions (see \cref{sec:variadicconstruction}).
+Copy and move constructors are provided as well (cf. \cref{lst:cuconstr3,lst:cuconstr4}).
+
+\begin{lstlisting}[style=code,float=ht,caption={Constructors of Class \texttt{WIR\_CompilationUnit}},label=lst:cuconstruction]
+// Default constructor creating an empty compilation unit.
+WIR_CompilationUnit::WIR_CompilationUnit@( void )@;Ü\label{lst:cuconstr1}Ü
+
+// Variadic constructor creating a compilation unit containing the given functions.
+templateæ<ætypename... Argsæ>æ WIR_CompilationUnit::WIR_CompilationUnit@(@ WIR_Function æ&&æf, Argsæ&&...æ __args @)@;Ü\label{lst:cuconstr2}Ü
+
+// Copy constructor.
+WIR_CompilationUnit::WIR_CompilationUnit@(@ const WIR_CompilationUnit æ&æc @)@;Ü\label{lst:cuconstr3}Ü
+
+// Move constructor.
+WIR_CompilationUnit::WIR_CompilationUnit@(@ WIR_CompilationUnit æ&&æc @)@;Ü\label{lst:cuconstr4}Ü
+\end{lstlisting}
+
+While functions, instructions or operations represent code within the \gls{WIR} software model, data regularly is managed either in a system's stack at a low abstraction level, or resides in some dedicated memory areas.
+Usually, local variables that are visible only within individual functions or in even smaller scopes are managed via the stack.
+All other kinds of data with a scope larger than local variables like, e.g., global variables, reside in dedicated memory areas and are modeled as so-called data objects within \gls{WIR}.
+An in-depth discussion of data objects and of the associated class \texttt{WIR\_Data} follows later in \cref{sec:data}.
+
+However, as data can be declared to be visible only within a code file's scope in many programming languages, class \texttt{WIR\_CompilationUnit} also includes the management of a list of data objects.
+In analogy to \cref{chap:lists}, methods ranging from \texttt{WIR\_CompilationUnit::pushBackData} to \texttt{WIR\_CompilationUnit::findData} are provided.
+Compilation units finally provide a method \texttt{getDataLayout} that groups data objects to sections.
+We defer the discussion of this method to \cref{sec:memlayout} introducing the details of the \gls{WIR} memory layout.
+
+
+%-------------------------------------------------------------------------
+\section{Functions}
+\label{sec:functions}
+%-------------------------------------------------------------------------
+
+According to the software model from \cref{fig:swmodel}, class \texttt{WIR\_Function} represents code functions where functions in turn act as container for a list of basic blocks.
+Thus, \texttt{WIR\_Function} again contains all list operations from \cref{chap:lists} for the management of basic blocks.
+
+Since functions usually have a unique and human-readable name, all regular constructors of class \texttt{WIR\_Function} require a string containing the function name as argument, as can be seen in \cref{lst:fctconstruction}, \crefrange{lst:fctconstr1}{lst:fctconstr4}.
+Such strings can either be copied into the constructed \gls{WIR} function, or they can be moved for improved efficiency.
+Functions can also be copy- or move-constructed (cf. \crefrange{lst:fctconstr5}{lst:fctconstr6} below).
+Furthermore, dedicated methods to set and get a function's name are also provided (cf. \crefrange{lst:fctconstr7}{lst:fctconstr9}).
+
+\begin{lstlisting}[style=code,float=ht,caption={Constructors and Methods for Name Handling of Class \texttt{WIR\_Function}},label=lst:fctconstruction]
+// Default constructor creating an empty function with a copied string as function name.
+WIR_Function::WIR_Function@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:fctconstr1}Ü
+
+// Default constructor creating an empty function with a moved string as function name.
+WIR_Function::WIR_Function@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:fctconstr2}Ü
+
+// Variadic constructor creating a function containing the given basic blocks, copied function name.
+templateæ<ætypename... Argsæ>æ WIR_Function::WIR_Function@(@ const ästd::stringä æ&æs, WIR_BasicBlock æ&&æb,                                                                 Argsæ&&...æ __args @)@;Ü\label{lst:fctconstr3}Ü
+
+// Variadic constructor creating a function containing the given basic blocks, moved function name.
+templateæ<ætypename... Argsæ>æ WIR_Function::WIR_Function@(@ ästd::stringä æ&&æs, WIR_BasicBlock æ&&æb,                                                                      Argsæ&&...æ __args @)@;Ü\label{lst:fctconstr4}Ü
+
+// Copy constructor.
+WIR_Function::WIR_Function@(@ const WIR_Function æ&æf @)@;Ü\label{lst:fctconstr5}Ü
+
+// Move constructor.
+WIR_Function::WIR_Function@(@ WIR_Function æ&&æf @)@;Ü\label{lst:fctconstr6}Ü
+
+// Set function name to a copied string.
+@void@ WIR_Function::setName@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:fctconstr7}Ü
+
+// Set function name to a moved string.
+@void@ WIR_Function::setName@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:fctconstr8}Ü
+
+// Get the function name.
+ästd::stringä WIR_Function::getName@( void )@ const;Ü\label{lst:fctconstr9}Ü
+\end{lstlisting}
+
+A function's code size in bytes can be retrieved using method \texttt{getSize} from \cref{lst:fctsize}.
+The returned value is the accumulation of the byte sizes of all basic blocks contained by a function.
+
+\begin{lstlisting}[style=code,float=h,caption={Size Computation by Class \texttt{WIR\_Function}},label=lst:fctsize]
+// Get a function's byte size.
+@unsigned long long@ WIR_Function::getSize@( void )@;Ü\label{lst:fctsize1}Ü
+\end{lstlisting}
+
+As already introduced in \cref{ssec:hwmodel}, \gls{WIR} supports the concept of virtual registers.
+Virtual registers serve as an abstraction of actual physical registers that are available in some processor architecture.
+For each group of physical registers that an architecture might feature like, e.g., general-purpose registers or floating-point registers, \gls{WIR} provides a corresponding group of virtual registers.
+These virtual registers have the same properties as their physical counterparts, esp. their bit widths are identical.
+The abstraction from physical to virtual registers simply comes by assuming that there is an infinte amount of virtual registers available, while the number of physical registers of course is finite and limited.
+
+This abstraction is useful to simplify the design of code optimizations, since they not necessarily need to bother with the availability of some actual, physical registers.
+Instead, an optimization can simply create a new virtual register on the fly and generate optimized code using such virtual registers.
+\gls{WIR} thus generally supports so-called virtual code on the one hand, i.e., code containing at least one such virtual register, and physical code on the other hand, i.e., code containing no virtual registers at all and only relying on physical registers.
+
+According to various processor manufacturer's \gls{ABI} specifications, the management of registers is usually done at the level of code functions.
+Thus, \gls{WIR} functions also provide the complete list \gls{API} from \cref{chap:lists} for the creation, insertion and management of objects of class \texttt{WIR\_VirtualRegister}.
+
+\begin{lstlisting}[style=code,float=t,caption={Precoloring and Interference Handling of Class \texttt{WIR\_Function}},label=lst:precol]
+// Precolor the given virtual register with a physical register for register allocation.
+@void@ WIR_Function::insertPrecolor@(@ const WIR_VirtualRegister æ&æv, const WIR_PhysicalRegister æ&æp @)@;Ü\label{lst:precol1}Ü
+
+// Remove any precoloring information related to some virtual register.
+@void@ WIR_Function::erasePrecolor@(@ const WIR_VirtualRegister æ&æv @)@;Ü\label{lst:precol2}Ü
+
+// Remove all precoloring information from a WIR function.
+@void@ WIR_Function::clearPrecolors@( void )@;Ü\label{lst:precol3}Ü
+
+// Determine whether a virtual register is precolored or not.
+@bool@ WIR_Function::containsPrecolor@(@ const WIR_VirtualRegister æ&æv @)@ const;Ü\label{lst:precol4}Ü
+
+// Find the physical register associated with some virtual register.
+WIR_PhysicalRegister æ&æWIR_Function::findPrecolor@(@ const WIR_VirtualRegister æ&æv @)@ const;Ü\label{lst:precol5}Ü
+
+// Mark the two given registers as interfering for register allocation.
+@void@ WIR_Function::insertInterference@(@ const WIR_VirtualRegister æ&æv, const WIR_PhysicalRegister æ&æp @)@;Ü\label{lst:precol6}Ü
+
+// Remove any interference between the two specified registers.
+@void@ WIR_Function::eraseInterference@(@ const WIR_VirtualRegister æ&æv @)@;Ü\label{lst:precol7}Ü
+
+// Remove all interference information from a WIR function.
+@void@ WIR_Function::clearInterferences@( void )@;Ü\label{lst:precol8}Ü
+
+// Determine whether the two given registers interfere.
+@bool@ WIR_Function::interfere@(@ const WIR_VirtualRegister æ&æv, const WIR_PhysicalRegister æ&æp @)@ const;Ü\label{lst:precol9}Ü
+
+// Find the set of all physical registers that a virtual register interferes with.
+WIR_PhysicalRegisterSet WIR_Function::findInterferences@(@ const WIR_VirtualRegister æ&æv @)@ const;Ü\label{lst:precol10}Ü
+\end{lstlisting}
+
+Obviously, virtual \gls{WIR} code is not executable by some real processor architecture due to the incompatible numbers of used registers.
+It is thus necessary to transform virtual to physical \gls{WIR} code by mapping all virtual registers to the few actual physical registers of some real processor architecture.
+This is the main purpose of the \gls{WIR} register allocators described later in \cref{sec:optregalloc}.
+Such mappings of virtual to physical registers regularly have to follow certain rules.
+E.g., a processor's calling conventions can mandate that certain physical registers must be used, especially for passing function arguments or return values.
+Or some physical register must not be used in certain situations, e.g., when a machine operation shall not touch the stack pointer.
+
+It is thus necessary to express such contraints within \gls{WIR}.
+For this purpose, class \texttt{WIR\_Function} offers the precoloring and interference methods shown in \cref{lst:precol}.
+
+The term precoloring comes from the fact that nowadays, graph coloring is the de-facto standard technique for register allocation (cf. \cref{sec:optregalloc}).
+Adding precoloring information thus constrains the register allocator to use a certain physical register when allocating some virtual register.
+\gls{WIR} functions now allow to insert and erase such precoloring information between a virtual and a physical register (cf. \crefrange{lst:precol1}{lst:precol3} of \cref{lst:precol}).
+
+Adding a precolor using \texttt{insertPrecolor} requires that the specified virtual register is actually managed by the used \gls{WIR} function.
+Furthermore, both the virtual and the physical register to be used during precoloring have to belong to the same group of processor registers.
+Like this, it is prevented to precolor, e.g., a general-purpose virtual register with some physical floating-point register.
+Finally, the two register to be used for precoloring must not have been marked as interfering before (see below).
+If any of these rules is violated, \texttt{insertPrecolor} fails with a runtime error.
+
+The lookup of precoloring information can simply be done using \texttt{containsPrecolor} (cf. \cref{lst:precol4} of \cref{lst:precol}) and \texttt{findPrecolor} (cf. \cref{lst:precol5}).
+Both methods expect a reference to a virtual register as argument and return whether it is precolored, or its actual precolor, resp.
+\texttt{findPrecolor} again fails with a runtime error if it is applied to a virtual register that is either not managed by the used function, or that is not precolored at all.
+
+An interference denotes a constraint where a virtual register must not be mapped to some physical register.
+Interferences thus represent the opposite kind of register allocation constraints than precolors.
+For this simple reason, \gls{WIR} ensures that no contradicting precoloring and interference constraints can be applied to the very same virtual and physical registers.
+
+\begin{lstlisting}[style=code,float=t,caption={Handling of Physical Registers Used for Function Argument Passing},label=lst:fctargs]
+// Add a physical register as external function argument.
+@void@ WIR_Function::addFunctionInput@(@ const WIR_PhysicalRegister æ&æp @)@;Ü\label{lst:fctargs1}Ü
+
+// Get set of physical registers providing external function inputs.
+const WIR_PhysicalRegisterSet æ&æWIR_Function::getFunctionInputs@( void )@ const;Ü\label{lst:fctargs2}Ü
+\end{lstlisting}
+
+The insertion and deletion of interferences can be done with the corresponding \texttt{insert}, \texttt{erase} and \texttt{clear} methods from \cref{lst:precol} (cf. \crefrange{lst:precol6}{lst:precol8}).
+Looking up interferences is simple using methods \texttt{interfere} (cf. \cref{lst:precol9}) and \texttt{findInterferences} (cf. \cref{lst:precol10}).
+\texttt{findInterferences} returns a set of references to physical registers that interfere with some given virtual register.
+The returned set of type \texttt{WIR\_PhysicalRegisterSet} is basically declared as \texttt{std::set<std::reference\_wrapper<WIR\_PhysicalRegister>{}>} within \gls{WIR}.
+More details about the nature of such sets or maps declared as basic data types within \gls{WIR} can be found in \cref{chap:setsmaps}.
+
+\begin{lstlisting}[style=code,float=h,caption={Stack Frame Handling of Class \texttt{WIR\_Function}},label=lst:stackframe]
+// Set a function's stack frame size to s bytes.
+@void@ WIR_Function::setFrameSize@( int s )@;Ü\label{lst:stackframe1}Ü
+
+// Determine a function's stack frame size in bytes.
+@int@ WIR_Function::getFrameSize@( void )@ const;Ü\label{lst:stackframe2}Ü
+\end{lstlisting}
+
+Processor-specific calling conventions regularly also specify physical registers that have to be used for function argument passing.
+Such physical registers are thus defined outside the called function, and are used inside a function.
+For a correct data flow analysis -- esp. during Available Definitions, Reaching Definitions, or Def-Use/Use-Def Chain analyses (cf. \cref{chap:analysis}) -- it is thus important to properly consider such definitions of physical registers serving as external function input.
+For this purpose, \gls{WIR} functions allow to specify such physical registers using the methods \texttt{addFunctionInput} and \texttt{getFunctionInputs} shown in \cref{lst:fctargs}.
+
+As motivated previously, local variables are usually managed via the stack.
+Thus, it is crucial to properly model stack frames of functions within low-level code.
+
+\begin{wirFutureWork}\label{fw:stackframe}
+At the time of writing of this document, class \texttt{WIR\_Function} does not yet include any well-structured concepts for the generic modelling of stack frames.
+Especially, \gls{WIR} functions currently do not support individual sections inside a stack frame for, e.g., backups of callee-saved registers, local variables, or overflow arguments.
+Likewise, no means currently exist to model different symbols in a stack frame along with their byte sizes, alignments, or stack or frame pointer-related stack offsets.
+Such a generic model of stack frames inside \gls{WIR} functions is currently under development.
+\end{wirFutureWork}
+
+For the abovementioned reasons, class \texttt{WIR\_Function} currently provides only rudimentary support for stack frames, in the sense that only the overall byte size of a function's stack frame can be specified or queried (cf. \cref{lst:stackframe}).
+The inner organization of a stack frame and the generation of code properly accessing stack items with their correct offsets thus remains in the sole responsibility of application code making use of the \gls{WIR} library.
+
+
+%-------------------------------------------------------------------------
+\section{Basic Blocks}
+\label{sec:basicblocks}
+%-------------------------------------------------------------------------
+
+Basic blocks as specified in \cref{def:bb} primarily represent instruction sequences so that class \texttt{WIR\_Basic\-Block} once more features the complete list \gls{API} (cf. \cref{chap:lists}) for the handling of instructions.
+In addition to that, a convenience method \texttt{moveInstruction} exists (cf. \cref{lst:bbmoveinstr}) that allows to move a specified instruction \texttt{i} between different basic blocks.
+Both the source basic block currently holding instruction \texttt{i} and the target basic block to which \texttt{i} shall be moved have to belong to the very same function.
+Otherwise, \gls{WIR} issues a runtime error.
+\texttt{moveInstruction} then moves \texttt{i} to the last position of the instruction list of the target basic block.
+
+\begin{lstlisting}[style=code,float=t,caption={Moving of Instructions by Class \texttt{WIR\_BasicBlock}},label=lst:bbmoveinstr]
+// Move a given instruction from its current basic block to this one.
+WIR_Instruction æ&æWIR_BasicBlock::moveInstruction@(@ WIR_Instruction æ&æi @)@;Ü\label{lst:bbmoveinstr1}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=h,caption={Constructors and Methods for Name Handling of Class \texttt{WIR\_BasicBlock}},label=lst:bbconstruction]
+// Default constructor creating an empty basic block.
+WIR_BasicBlock::WIR_BasicBlock@( void )@;Ü\label{lst:bbconstr1}Ü
+
+// Variadic constructor creating a basic block containing the given instructions.
+templateæ<ætypename... Argsæ>æ WIR_BasicBlock::WIR_BasicBlock@(@ WIR_Instruction æ&&æi, Argsæ&&...æ __args @)@;Ü\label{lst:bbconstr2}Ü
+
+// Copy constructor.
+WIR_BasicBlock::WIR_BasicBlock@(@ const WIR_BasicBlock æ&æb @)@;Ü\label{lst:bbuconstr3}Ü
+
+// Move constructor.
+WIR_BasicBlock::WIR_BasicBlock@(@ WIR_BasicBlock æ&&æb @)@;Ü\label{lst:bbconstr4}Ü
+
+// Get the basic block name.
+ästd::stringä WIR_BasicBlock::getName@( void )@ const;Ü\label{lst:bbconstr5}Ü
+\end{lstlisting}
+
+The construction of basic blocks is straightforward using the standard constructors from \cref{lst:bbconstruction}.
+Basic blocks carry a unique name that usually represents some label within assembly code.
+\gls{WIR} creates these basic block names automatically.
+By default, basic block names start with ``\texttt{.L}'' followed by a unique numerical ID.
+If a basic block is the very first one within its owning function, its name is equal to the function's name (this default naming convention is configurable, of course).
+This basic block name can be retrieved using method \texttt{getName} (cf. \cref{lst:bbconstr5} from \cref{lst:bbconstruction}).
+
+For the computation of a basic block's code size in bytes, method \texttt{getSize} (cf. \cref{lst:bbsize}) accumulates the byte size of all instructions within a basic block.
+
+\begin{lstlisting}[style=code,float=h,caption={Size Computation by Class \texttt{WIR\_BasicBlock}},label=lst:bbsize]
+// Get a basic block's byte size.
+@unsigned long long@ WIR_BasicBlock::getSize@( void )@;Ü\label{lst:bbsize1}Ü
+\end{lstlisting}
+
+Due to the fact that the execution of basic blocks according to \cref{def:bb} must always end with its very last instruction, only this very last instruction can be a branch that directs a program's control flow to some different location in the code.
+Thus, a \acrfull{CFG} is defined as follows:
+
+\begin{definition}[\acrlong{CFG}] \label{def:cfg}
+  A \emph{control flow graph} $\textit{CFG} = (V, E, s)$ is a directed graph with
+  \begin{itemize}
+    \item $V = \{$ $b_1, \dots, b_n$ $\}$ being the set of all basic blocks,
+    \item $E = \{$ $(b_i \rightarrow b_j)$ $\vert$ basic block $b_j$ can be executed immediately after $b_j$ $\}$,
+    \item $s \in V$ being the unique start node of the \gls{CFG}.
+  \end{itemize}
+\end{definition}
+
+\cref{fig:cfgs} shows some examples of typical \glspl{CFG} representing if-then, if-else and switch-case constructs, as well as typical pre-checked (for or while-do) and post-checked (do-while) loops.
+Obviously, such \glspl{CFG} imply a successor and predecessor relation between basic blocks where, e.g., \texttt{.L6} is a successor of \texttt{.L4} in \cref{fig:cfgs}, while \texttt{.L18} is predecessor of \texttt{.L16}.
+\gls{WIR} basic blocks automatically maintain these relations and support their query using the methods shown in \cref{lst:cfg}.
+\texttt{getSuccessors} and \texttt{getPredecessors} return the sets of basic blocks that could be executed immediately after or before another block, resp.
+These sets of type \texttt{WIR\_BasicBlockSet} are basically declared as\label{def:bbset} \texttt{std::set<std::reference\_wrapper<WIR\_BasicBlock>{}>} within \gls{WIR} (cf. \cref{chap:setsmaps}).
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=\textwidth]{cfgs.png}
+  \end{center}
+  \caption{Typical Control Flow Graphs}
+  \label{fig:cfgs}
+\end{figure}
+
+\begin{lstlisting}[style=code,float=ht,caption={Control Flow Properties of Class \texttt{WIR\_BasicBlock}},label=lst:cfg]
+// Get the set of successor basic blocks.
+WIR_BasicBlockSet WIR_BasicBlock::getSuccessors@( void )@;Ü\label{lst:cfg1}Ü
+
+// Get the set of predecessor basic blocks.
+WIR_BasicBlockSet WIR_BasicBlock::getPredecessors@( void )@;Ü\label{lst:cfg2}Ü
+\end{lstlisting}
+
+In order to fully automatically determine these successor and predecessor relations, \gls{WIR} inspects a basic block's very last instruction, if existing.
+If this last instruction contains a (conditional, unconditional, or indirect) jump operation, all potential jump targets are collected as successors.
+Otherwise, the very next basic block immediately following in the list of basic blocks maintained by the enclosing \gls{WIR} function is considered as so-called implicit successor.
+Once the successors are identified, \gls{WIR} determines the predecessors by exploiting the inverse of the successors.
+Methods \texttt{getSuccessors} and \texttt{getPredecessors} do not consider interprocedural control flow stemming from function calls or returns.
+
+\begin{wirFutureWork}
+At the time of writing of this document, processor architectures coming with delay slots are not yet supported.
+Such architectures have the effect that it is not necessarily the very last instruction of a basic block that may contain a jump operation leading to control flow changes.
+The control flow analyses built into \gls{WIR} will be extended by this feature in the future.
+\end{wirFutureWork}
+
+
+%-------------------------------------------------------------------------
+\section{Instructions}
+\label{sec:instructions}
+%-------------------------------------------------------------------------
+
+Class \texttt{WIR\_Instruction} serves to model \gls{ILP} in that sense that an instruction forms a group of assembly operations which are all supposed to be executed in parallel by the underlying processor hardware.
+As such, \gls{WIR} instructions simply boil down to a container of operations so that the complete list \gls{API} from \cref{chap:lists} for the management of operations exists.
+In analogy to class \texttt{WIR\_BasicBlock}, a convenience method \texttt{moveOperation} exists (cf. \cref{lst:instrmoveop}) in order to move a specified operation \texttt{o} between different instructions.
+Again, the source and the target instructions of such a move have to belong to the very same function, and \texttt{moveOperation} appends \texttt{o} at the tail of the target instruction.
+
+\begin{lstlisting}[style=code,float=h,caption={Moving of Operations by Class \texttt{WIR\_Instruction}},label=lst:instrmoveop]
+// Move a given operation from its current instruction to this one.
+WIR_Operation æ&æWIR_Instruction::moveOperation@(@ WIR_Operation æ&æo @)@;Ü\label{lst:instrmoveop1}Ü
+\end{lstlisting}
+
+Class \texttt{WIR\_Instruction} comes with the standard set of constructors shown in \cref{lst:instrconstruction}.
+
+\begin{lstlisting}[style=code,float=ht,caption={Constructors of Class \texttt{WIR\_Instruction}},label=lst:instrconstruction]
+// Default constructor creating an empty instruction.
+WIR_Instruction::WIR_Instruction@( void )@;Ü\label{lst:instrconstruction1}Ü
+
+// Variadic constructor creating an instruction containing the given operations.
+templateæ<ætypename... Argsæ>æ WIR_Instruction::WIR_Instruction@(@ WIR_Operation æ&&æo, Argsæ&&...æ __args @)@;Ü\label{lst:instrconstruction2}Ü
+
+// Copy constructor.
+WIR_Instruction::WIR_Instruction@(@ const WIR_Instruction æ&æi @)@;Ü\label{lst:instrconstruction3}Ü
+
+// Move constructor.
+WIR_Instruction::WIR_Instruction@(@ WIR_Instruction æ&&æi @)@;Ü\label{lst:instrconstruction4}Ü
+\end{lstlisting}
+
+In order to determine the size of an instruction, the methods from \cref{lst:instrsize} can be used.
+\texttt{getBitWidth} accumulates the bit widths of all operations inside an instruction and returns this value.
+\texttt{getSize} in turn uses this bit width and divides it by 8 in order to get an instruction's byte size.
+In the unlikely case that the bit width of an instruction is not a multiple of 8, \texttt{getSize} rounds up so that the only partially occupied byte is fully counted.
+
+\begin{lstlisting}[style=code,float=ht,caption={Size Computation by Class \texttt{WIR\_Instruction}},label=lst:instrsize]
+// Get an instruction's bit width.
+@unsigned int@ WIR_Instruction::getBitWidth@( void )@;Ü\label{lst:instrsize1}Ü
+
+// Get an instruction's byte size.
+@unsigned long long@ WIR_Instruction::getSize@( void )@;Ü\label{lst:instrsize2}Ü
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Operations}
+\label{sec:operations}
+%-------------------------------------------------------------------------
+
+Machine operations are modelled by class \texttt{WIR\_Operation} within \gls{WIR}.
+They can be created using the constructors from \cref{lst:opconstruction}.
+
+\begin{lstlisting}[style=code,float=ht,caption={Constructors of Class \texttt{WIR\_Operation}},label=lst:opconstruction]
+// Variadic constructor creating an operation containing the given parameters.
+templateæ<ætypename... Argsæ>æ WIR_Operation::WIR_Operation@(@ const WIR_BaseProcessor::OpCode æ&æoc,                                                                      const WIR_BaseProcessor::OperationFormat æ&æof,                                                             Argsæ&&...æ __args @)@;Ü\label{lst:opconstruction1}Ü
+
+// Copy constructor.
+WIR_Operation::WIR_Operation@(@ const WIR_Operation æ&æo @)@;Ü\label{lst:opconstruction2}Ü
+
+// Move constructor.
+WIR_Operation::WIR_Operation@(@ WIR_Operation æ&&æo @)@;Ü\label{lst:opconstruction3}Ü
+\end{lstlisting}
+
+As can be seen, there is no default constructor creating a completely empty operation, because each machine operation must at least have some opcode and some operation format.
+Both are processor-specific properties of machine operations that specify the operator computed by an operation, and the number and types of arguments required by an operation according to a processor manufacturer's \gls{ISA} specification.
+They are generically represented by classes \texttt{WIR\_BaseProcessor::OpCode} and \texttt{WIR\_BaseProcessor::OperationFormat}, and \cref{chap:hwmodel} explains their concepts in more detail.
+The general rationale behind this design of \gls{WIR} operations is to achieve \gls{ISA}-safeness, i.e., to prevent the creation of operations that are not compliant with some \gls{ISA} specifications.
+If, e.g., a processor manufacturer specifies that an \texttt{ADD} machine operation must have three register parameters, then the according operation format must be provided to the constructor from \cref{lst:opconstruction1}.
+And if only two register parameters are actually passed to the constructor, it will fail with a runtime error indicating that the required operation format is violated.
+
+An operation's opcode and format can be retrieved using methods \texttt{getOpCode} and \texttt{getOperationFormat}, resp. (cf. \cref{lst:opcode}).
+
+\begin{lstlisting}[style=code,float=t,caption={Opcode and Format Handling of Class \texttt{WIR\_Operation}},label=lst:opcode]
+// Get an operation's opcode.
+const WIR_BaseProcessor::OpCode æ&æWIR_Operation::getOpCode@( void )@;Ü\label{lst:opcode1}Ü
+
+// Get an operation's format.
+const WIR_BaseProcessor::OperationFormat æ&æWIR_Operation::getOperationFormat@( void )@;Ü\label{lst:opcode2}Ü
+\end{lstlisting}
+
+Any kind of operand that an operation requires is modeled by parameters within \gls{WIR} (cf. \cref{sec:parameters}).
+As a consequence, class \texttt{WIR\_Operation} thus acts as container of parameters so that the entire list \gls{API} from \cref{chap:lists} is available for parameter management.
+\gls{WIR} parameters generally can be classified into either explicit or implicit parameters.
+An explicit parameter is one that is explicitly required by some machine operation, since an architecture's \gls{ISA} mandates this.
+Explicit parameters thus ensure the syntactical correctness of \gls{WIR} operations according to some processor manufacturer's specifications.
+They are thus mandatory part of an operation of some given format, and explicit parameters are usually always printed out as operation argument whenever a file dump of \gls{WIR} is performed -- e.g., during assembly output creation.
+
+In contrast, implicit parameters are optional.
+An arbitrary amount of implicit parameters can freely be added to a \gls{WIR} operation, fully independent of the operation's actual format.
+Implicit parameters are printed out in a file dump only upon explicit request.
+The rationale of implicit parameters is to ensure the semantical correctness of some operation.
+There exist situations where some operation implicitly reads or writes a certain register, where this register is, according to some \gls{ISA} specification, not explicitly given as operand.
+Prime examples for such situations are machine operations for function calls or returns.
+According to an architecture's calling conventions, such operations implicitly deal with well-specified registers for argument passing, or for passing a function's return value, or for the proper handling of the return address register.
+The \gls{WIR} data flow analyses -- esp. its Available Definitions, Reaching Definitions, or Def-Use/Use-Def Chain analyses (cf. \cref{chap:analysis}) -- must be aware of such ``hidden'' register accesses so that subsequent code optimizations do not generate invalid code.
+An operation's implicit parameters are automatically considered by all \gls{WIR} analyses so that proper analysis results can be ensured this way.
+
+The property whether some parameter is explicit or implicit is specified during parameter construction (cf. \cref{sec:parameters}), and any kind of parameters can be added to an operation using the list \gls{API} from \cref{chap:lists}.
+Adding, modifying or erasing explicit parameters of an operation, however, bears the risk to end up with operations that violate their specified operation format, i.e., that are no longer \gls{ISA}-safe.
+By default, \gls{WIR} assumes that the user knows what she/he does so that no sanity checks regarding the operation format are carried out during the manipulation of an operation's parameters.
+This default behavior significantly speeds up the parameter handling of class \texttt{WIR\_Operation}.
+If, however, such parameter sanity checks are desired, the static methods from \cref{lst:paramcheck} come into play.
+After the use of \texttt{enforceParameterChecking}, \gls{WIR} fails with a runtime error whenever parameter manipulations lead to an operation whose structure violates its given operation format.
+\texttt{resetParameterChecking} basically reverts this behavior.
+
+\begin{lstlisting}[style=code,float=h,caption={Parameter Checking of Class \texttt{WIR\_Operation}},label=lst:paramcheck]
+// Activate explicit checks of parameters and operation formats whenever operation parameters are modified.
+static @void@ WIR_Operation::enforceParameterChecking@( void )@;Ü\label{lst:paramcheck1}Ü
+
+// Deactivate explicit checks or parameters and operation formats.
+static @void@ WIR_Operation::resetParameterChecking@( void )@;Ü\label{lst:paramcheck2}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=t,caption={Explicit and Implicit Parameter Handling of Class \texttt{WIR\_Operation}},label=lst:expimpparams]
+// Get the list of all explicit parameters.
+const std::list<std::reference_wrapper<WIR_Parameter>> æ&æWIR_Operation::getExplicitParameters@( void )@ const;Ü\label{lst:expimpparams1}Ü
+
+// Get the nth explicit parameter, starting with n = 1.
+WIR_Parameter æ&æWIR_Operation::getExplicitParameter@( unsigned int n )@ const;Ü\label{lst:expimpparams2}Ü
+
+// Get the total number of explicit parameters.
+@unsigned int@ WIR_Operation::getNumberOfExplicitParameters@( void )@ const;Ü\label{lst:expimpparams3}Ü
+
+// Get the total number of implicit parameters.
+@unsigned int@ WIR_Operation::getNumberOfImplicitParameters@( void )@ const;Ü\label{lst:expimpparams4}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!b,caption={Operation Classification},label=lst:operclass]
+// Determine whether an operation reads from memory.
+@bool@ WIR_Operation::isMemoryLoad@( void )@ const;Ü\label{lst:operclass1}Ü
+
+// Determine whether an operation writes to memory.
+@bool@ WIR_Operation::isMemoryStore@( void )@ const;Ü\label{lst:operclass2}Ü
+
+// Determine whether an operation implicitly accesses memory, without being an explicit load or store.
+@bool@ WIR_Operation::isImplicitMemoryAccess@( void )@ const;Ü\label{lst:operclass3}Ü
+
+// Determine whether an operation is a register-register move.
+@bool@ WIR_Operation::isMove@( void )@ const;Ü\label{lst:operclass4}Ü
+
+// Determine whether an operation calls a function.
+@bool@ WIR_Operation::isCall@( void )@ const;Ü\label{lst:operclass5}Ü
+
+// Determine whether an operation indirectly calls a function.
+@bool@ WIR_Operation::isIndirectCall@( void )@ const;Ü\label{lst:operclass6}Ü
+
+// Determine whether an operation returns from a function call.
+@bool@ WIR_Operation::isReturn@( void )@ const;Ü\label{lst:operclass7}Ü
+
+// Determine whether an operation performs a conditional jump.
+@bool@ WIR_Operation::isConditionalJump@( void )@ const;Ü\label{lst:operclass8}Ü
+
+// Determine whether an operation performs an unconditional jump.
+@bool@ WIR_Operation::isUnconditionalJump@( void )@ const;Ü\label{lst:operclass9}Ü
+
+// Determine whether an operation indirectly performs a jump.
+@bool@ WIR_Operation::isIndirectJump@( void )@ const;Ü\label{lst:operclass10}Ü
+
+// Determine whether an operation performs a jump.
+@bool@ WIR_Operation::isJump@( void )@ const;Ü\label{lst:operclass11}Ü
+
+// Determine whether an operation has side effects.
+@bool@ WIR_Operation::hasSideEffects@( void )@ const;Ü\label{lst:operclass13}Ü
+\end{lstlisting}
+
+For the handling of explicit and implicit parameters, class \texttt{WIR\_Operation} provides the methods shown in \cref{lst:expimpparams}.
+A list of references to all explicit parameters is provided by \texttt{getExplicitParameters}.
+A reference to the \texttt{n}$^\mathit{th}$ explicit parameter is provided by \texttt{getExplicitParameter}, where parameter numbers begin with the value 1.
+Generally, \gls{WIR} does not perform a sanity check if a parameter number \texttt{n} is provided that does not exist.
+The overall number of both explicit and implicit parameters of an operation can be retrieved using \texttt{getNumberOfExplicitParameters} or \texttt{getNumberOfImplicitParameters}, resp.
+
+Depending on their opcodes and the nature of their functional behavior, operations can generally be classified into different categories.
+In the context of an assembly-level \gls{IR}, it is especially relevant to determine whether operations access memory, or whether they change a program's control flow.
+Such information is provided by class \texttt{WIR\_Operation} via the methods shown in \cref{lst:operclass}.
+These properties can only be retrieved, but they cannot actively be set for some operation, since this classification is hard-wired with the architecture-specific mnemonics (cf. \cref{sssec:opcodes}).
+Method \texttt{isMove} helps to identify operations copying a value from one register to another.
+Information of this kind is of particular interest for register allocation.
+Operations realizing function calls and where the called function is directly provided as explicit parameter can be identified via \texttt{isCall}, register-indirect calls can be handled using \texttt{isIndirectCall}.
+Regarding jump operations, \gls{WIR} operations allow to distinguish between conditional and unconditional direct jumps where the jump target is given as explicit parameter.
+Register-indirect jumps are addressed by method \texttt{isIndirectJump}.
+If an operation is any kind of abovementioned jump, \texttt{isJump} returns \texttt{true}.
+Finally, method \texttt{hasSideEffects} helps to identify operations that lead to non-obvious changes of a processor's internal state such as, e.g., disabling interrupts, changing into supervisor mode, or invalidating cache lines, etc.
+
+\begin{lstlisting}[style=code,float=t,caption={Jump Target Handling of Class \texttt{WIR\_Operation}},label=lst:opjmptgt]
+// Add a given basic block to a jump operation's set of explicit jump targets.
+@void@ WIR_Operation::addJumpTarget@(@ const WIR_BasicBlock æ&æb @)@;Ü\label{lst:opjmptgt1}Ü
+
+// Remove a given basic block from a jump operation's set of explicit jump targets.
+@void@ WIR_Operation::eraseJumpTarget@(@ const WIR_BasicBlock æ&æb @)@;Ü\label{lst:opjmptgt2}Ü
+
+// Determine whether explicit jump targets have been specified.
+@bool@ WIR_Operation::jumpTargetsAdded@( void )@ const;Ü\label{lst:opjmptgt3}Ü
+
+// Get the set of basic blocks being jump targets of an operation.
+WIR_BasicBlockSet WIR_Operation::getJumpTargets@( void )@ const;Ü\label{lst:opjmptgt4}Ü
+\end{lstlisting}
+
+As already discussed in \cref{sec:basicblocks}, a basic block's very last operation determines the overall control flow of a program.
+Using the methods shown in \cref{lst:operclass}, it is easy to automatically identify control flow branches.
+But for the proper generation of \glspl{CFG}, it is in addition important to identify all potential targets of some jump operation.
+This is supported by the methods of class \texttt{WIR\_Operation} shown in \cref{lst:opjmptgt}.
+\gls{WIR} follows a semi-automatic approach here, since it is in general impossible to determine all potential jump targets fully automatically.
+Especially in the presence of register-indirect jumps or far jumps using so-called literal pools, \gls{WIR} relies on additional annotations.
+Such annotations can be added to a jump operation via method \texttt{addJumpTarget} so that the specified basic block is stored as jump target.
+Likewise, \texttt{eraseJumpTarget} can be used to remove such annotated jump targets.
+\texttt{jumpTargetsAdded} returns whether additional jump target annotations have been specified for an operation or not.
+Finally, method \texttt{getJumpTargets} provides the set of all basic blocks to which an operation actually jumps.
+This set of jump targets is determined as follows:
+\begin{itemize}
+  \item If the operation is not a jump at all, the empty set is returned.
+  \item If jump targets were explicitly specified using \texttt{addJumpTarget},
+        the set of all these annotated jump targets is returned.
+  \item If no jump targets were annotated using \texttt{addJumpTarget},
+        \texttt{getJumpTargets} assumes that the operation's jump target is
+        provided as explicit parameter. It thus checks all operation parameters,
+        determines whether they represent some label, and finally returns the
+        set of all basic blocks that are referred by these labels.
+\end{itemize}
+
+Since indirect jumps are the only class of jumps that need a manual annotation of jump targets, and since they occur rather infrequent in real-life code, the presented approach of jump target handling within \gls{WIR} requires minimal effort for a proper control flow analysis.
+
+\begin{lstlisting}[style=code,float=t,caption={Size Computation by Class \texttt{WIR\_Operation}},label=lst:opersize]
+// Get an operation's bit width.
+@unsigned int@ WIR_Operation::getBitWidth@( void )@;Ü\label{lst:opersize1}Ü
+
+// Get an operation's byte size.
+@unsigned long long@ WIR_Operation::getSize@( void )@;Ü\label{lst:opersize2}Ü
+\end{lstlisting}
+
+In analogy to instructions, class \texttt{WIR\_Operation} features methods for bit width and byte size computation (cf. \cref{lst:opersize}).
+Both methods \texttt{getBitWidth} and \texttt{getSize} behave as described earlier in \cref{sec:instructions}.
+
+
+%-------------------------------------------------------------------------
+\section{Parameters}
+\label{sec:parameters}
+%-------------------------------------------------------------------------
+
+\begin{figure}[ht]
+  \begin{center}
+    \includegraphics[width=\textwidth]{parameters.png}
+  \end{center}
+  \caption{Inheritance Diagram of Class \texttt{WIR\_Parameter}}
+  \label{fig:wirparameters}
+\end{figure}
+
+\begin{lstlisting}[style=code,float=!b,caption={Generic Type Handling of Class \texttt{WIR\_Parameter}},label=lst:paramtype]
+// Get a parameter's type.
+virtual WIR_ParameterType WIR_Parameter::getType@( void )@ const @=@ §0§;Ü\label{lst:paramtype1}Ü
+
+// Enum WIR_ParameterType represents different types of WIR parameters.
+enum class WIR_ParameterType : @char@Ü\label{lst:paramtype2}Ü
+{
+  addr,     // An addressing mode parameter.
+  cond,     // A condition field parameter.
+  imm,      // An immediate parameter.
+  label,    // A label parameter.
+  reg,      // A register parameter.
+  str       // A string parameter.
+};
+\end{lstlisting}
+
+Class \texttt{WIR\_Parameter} is the generic representation of arguments of machine operations.
+Due to the large variety of different kinds of parameters, this class is an abstract base class from which the specialized \gls{WIR} parameters depicted in \cref{fig:wirparameters} inherit.
+For this reason, the constructors of class \texttt{WIR\_Parameter} do not require any further discussion here.
+References and pointers to actual objects derived from \texttt{WIR\_Parameter} can, as usual for C++, dynamically be casted back and forth using \texttt{std::dynamic\_cast}.
+For a convenient check whether some actual object is, e.g., a register or a label parameter, the purely virtual method \texttt{getType} (cf. \cref{lst:paramtype1} of \cref{lst:paramtype}) can be used.
+\texttt{getType} returns the appropriate element of the enumeration type \texttt{WIR\_ParameterType}, cf. \cref{lst:paramtype2}.
+
+The notion of explicit and implicit parameters has already been introduced earlier in \cref{sec:operations}.
+The status whether some parameter is explicit or implicit can be set or retrieved using the methods from \cref{lst:impparam}.
+Here, \texttt{setImplicit} (cf. \cref{lst:impparam1}) can be used to mark a parameter as implicit or not, depending on its Boolean argument.
+\texttt{isExplicit} (cf. \cref{lst:impparam2}) returns whether a parameter is explicit, while \texttt{isImplicit} (cf. \cref{lst:impparam3}) is its negation.
+
+\begin{lstlisting}[style=code,float=t,caption={Handling of Explicit and Implicit \texttt{WIR\_Parameter}s},label=lst:impparam]
+// Set whether a parameter is implicit or not.
+@void@ WIR_Parameter::setImplicit@( bool@ i æ=æ true @)@;Ü\label{lst:impparam1}Ü
+
+// Determine whether a parameter is explicit or not.
+@bool@ WIR_Parameter::isExplicit@( void )@ const;Ü\label{lst:impparam2}Ü
+
+// Determine whether a parameter is implicit or not.
+@bool@ WIR_Parameter::isImplicit@( void )@ const;Ü\label{lst:impparam3}Ü
+\end{lstlisting}
+
+The following sections present the properties of the derived parameter classes in more detail, starting with the most relevant classes for register parameters (\cref{ssec:regparams}), immediates (\cref{ssec:immparams}) and labels (\cref{ssec:labparams}), followed by addressing mode parameters (\cref{ssec:admodeparams}), condition fields (\cref{ssec:condparams}) and finally string parameters (\cref{ssec:strparams}).
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Register Parameters}
+\label{ssec:regparams}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\begin{lstlisting}[style=code,float=!b,caption={Constructors of Class \texttt{WIR\_RegisterParameter}},label=lst:regparamconstruction]
+// Default constructor creating a register parameter with the given register.
+WIR_RegisterParameter::WIR_RegisterParameter@(@ const WIR_BaseRegister æ&ær, WIR_Usage u, bool i æ=æ false @)@;Ü\label{lst:regparamconstruction1}Ü
+
+// Copy constructor.
+WIR_RegisterParameter::WIR_RegisterParameter@(@ const WIR_RegisterParameter æ&æp @)@;Ü\label{lst:regparamconstruction2}Ü
+
+// Move constructor.
+WIR_RegisterParameter::WIR_RegisterParameter@(@ WIR_RegisterParameter æ&&æp @)@;Ü\label{lst:regparamconstruction3}Ü
+
+// Enum WIR_Usage represents def/use properties of WIR parameters.
+enum class WIR_Usage : @char@Ü\label{lst:regparamconstruction4}Ü
+{
+  def,      // A parameter that is defined/written.
+  defuse,   // A parameter that is both defined/written and used/read.
+  use       // A parameter that is used/read.
+};
+\end{lstlisting}
+
+Class \texttt{WIR\_RegisterParameter} models any kind of register that acts as operand of an operation.
+The constructors of this class are shown in \cref{lst:regparamconstruction}.
+Obviously, the construction of register parameters requires a reference to some register (cf. \cref{lst:regparamconstruction1}).
+This can be any kind of physical or virtual register, of any kind of processor architecture and \gls{ISA} modeled in \gls{WIR}.
+Furthermore, the parameter's def/use characteristics must be given, i.e., the information whether the specified register will be written, read, or both in the context of its associated \gls{WIR} operation.
+Information of this kind is handled by the enumeration type \texttt{WIR\_Usage} (cf. \cref{lst:regparamconstruction4}), and it is essential for a proper automatic data flow analysis.
+An example showing the construction of a register parameter like this can be found in \cref{lst:listp1} of \cref{lst:listconstruction} (see \cpageref{lst:listconstruction}).
+
+After its construction, the def/use characteristics of a register parameter can be managed with the methods from \cref{lst:regparamdefuse}.
+The usage can explicitly be set via \texttt{setUsage} (\cref{lst:regparamdefuse1}), and its current usage can be retrieved with \texttt{getUsage} (\cref{lst:regparamdefuse2}).
+For convenience, class \texttt{WIR\_RegisterParameter} also provides the dedicated Boolean predicates \texttt{isDefined} (\cref{lst:regparamdefuse3}), \texttt{isUsed} (\cref{lst:regparamdefuse4}) and \texttt{isDefUsed} (\cref{lst:regparamdefuse5}) for the simple query of a specific usage status.
+
+\begin{lstlisting}[style=code,float=t,caption={Usage Handling of Class \texttt{WIR\_RegisterParameter}},label=lst:regparamdefuse]
+// Set a register parameter's usage characteristics.
+@void@ WIR_RegisterParameter::setUsage@(@ WIR_Usage u @)@;Ü\label{lst:regparamdefuse1}Ü
+
+// Get a register parameter's usage characteristics.
+WIR_Usage WIR_RegisterParameter::getUsage@( void )@ const;Ü\label{lst:regparamdefuse2}Ü
+
+// Determine whether a register parameter is defined.
+@bool@ WIR_RegisterParameter::isDefined@( void )@ const;Ü\label{lst:regparamdefuse3}Ü
+
+// Determine whether a register parameter is used.
+@bool@ WIR_RegisterParameter::isUsed@( void )@ const;Ü\label{lst:regparamdefuse4}Ü
+
+// Determine whether a register parameter is both defined and used.
+@bool@ WIR_RegisterParameter::isDefUsed@( void )@ const;Ü\label{lst:regparamdefuse5}Ü
+\end{lstlisting}
+
+Finally, a reference to the register associated with a register parameter can be obtained using \texttt{getRegister} (cf. \cref{lst:regparamreg}).
+
+\begin{lstlisting}[style=code,float=ht,caption={Register Handling of Class \texttt{WIR\_RegisterParameter}},label=lst:regparamreg]
+// Get the register associated with a parameter.
+WIR_BaseRegister æ&æWIR_RegisterParameter::getRegister@( void )@ const;Ü\label{lst:regparamreg1}Ü
+\end{lstlisting}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Immediates}
+\label{ssec:immparams}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Immediate parameters model constant numbers that can be used as argument of machine operations.
+By nature, such immediates are typically characterized by architecture-specific properties like, e.g., their bit widths and whether they are considered to be signed or unsigned.
+For these reasons, \gls{WIR} again makes use of a C++ class hierarchy modelling generic signed and unsigned immediates, and from which finally processor-specific immediates of actual bit widths are inherited.
+A simplified inheritance diagram of this class hierarchy is depicted in \cref{fig:wirimmediates}.
+For the sake of simplicity, internal details of this class hierarchy like, e.g., some C++ templates, are omitted from the following discussion, since application code will not come into touch with them.
+Instead, only the relevant concepts that are finally available in classes \texttt{WIR\_SignedImmediateParameter} and \texttt{WIR\_UnsignedImmediateParameter} will be presented.
+These two classes provide the generic interfaces for signed and unsigned immediate parameters of any bit width, resp.
+And processor-specific immediates are then derived by inheriting from these two classes like, e.g., the two RISC-V classes \texttt{RV\_Const12\_Signed} and \texttt{RV\_Const20\_Unsigned} shown in \cref{fig:wirimmediates}.
+
+Both signed and unsigned immediates have in common that the \gls{WIR} library does not come with any support for arbitrary bit widths of immediates.
+In particular, no third-party libraries for arbitrary precision arithmetics like, e.g., GMP~\cite{gmp26}, are used.
+Instead, \gls{WIR} relies on the C++ builtin types \texttt{signed long long} and \texttt{unsigned long long} and their actual bit widths on the host system on which the \gls{WIR} library has been built (cf. \cref{chap:build}).
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=\textwidth]{immediates.png}
+  \end{center}
+  \caption{Simplified Inheritance Diagram of Classes Modelling Immediate Parameters}
+  \label{fig:wirimmediates}
+\end{figure}
+
+\begin{wirWarn}
+Due to this dependence of \gls{WIR} immediates on the host system's bit widths, the construction of any immediate parameter with a bit width exceeding that of the host system will fail with a runtime error.
+Likewise, an attempt to assign some actual value exceeding the host's \texttt{long long} bit widths to an immediate will also fail.
+Furthermore, this behavior of \gls{WIR} immediates also depends on whether the whole software library has been built using 64 or 32 bits of the host system, cf. \cref{chap:bootstrap}, \cref{tab:configure}.
+\end{wirWarn}
+
+\begin{lstlisting}[style=code,float=!b,caption={Constructors of Classes for Signed and Unsigned Immediates},label=lst:immconstruction]
+// Default constructor creating a signed immediate parameter with the given value and bit width.
+WIR_SignedImmediateParameter::WIR_SignedImmediateParameter@( signed long long@ v, @unsigned int@ w @)@;Ü\label{lst:immconstruction1}Ü
+
+// Copy constructor.
+WIR_SignedImmediateParameter::WIR_SignedImmediateParameter@(@ const WIR_SignedImmediateParameter æ&æi @)@;Ü\label{lst:immconstruction2}Ü
+
+// Move constructor.
+WIR_SignedImmediateParameter::WIR_SignedImmediateParameter@(@ WIR_SignedImmediateParameter æ&&æi @)@;Ü\label{lst:immconstruction3}Ü
+
+
+// Default constructor creating an unsigned immediate parameter with the given value and bit width.
+WIR_UnsignedImmediateParameter::WIR_UnsignedImmediateParameter@( unsigned long long@ v, @unsigned int@ w @)@;Ü\label{lst:immconstruction4}Ü
+
+// Copy constructor.
+WIR_UnsignedImmediateParameter::WIR_UnsignedImmediateParameter@(@ const WIR_UnsignedImmediateParameter æ&æi @)@;Ü\label{lst:immconstruction5}Ü
+
+// Move constructor.
+WIR_UnsignedImmediateParameter::WIR_UnsignedImmediateParameter@(@ WIR_UnsignedImmediateParameter æ&&æi @)@;Ü\label{lst:immconstruction6}Ü
+\end{lstlisting}
+
+This dependence of \gls{WIR} immediates on the standard data types \texttt{signed long long} and \texttt{unsigned long long} is also visible from the two default constructors shown in \cref{lst:immconstruction1,lst:immconstruction4} of \cref{lst:immconstruction}.
+They take the immediate's actual value \texttt{v} as argument, which either is a \texttt{signed long long} (class \texttt{WIR\_Signed\-ImmediateParameter}) or an \texttt{unsigned long long} (class \texttt{WIR\_UnsignedImmediateParameter}).
+Furthermore, the immediate's bit width \texttt{w} is also required for construction.
+Class \texttt{WIR\_SignedImmediateParameter} always assumes that immediates are represented as binary number in two's-complement format, while class \texttt{WIR\_UnsignedImmediateParameter} assumes the natural unsigned binary representation.
+Thus, the range of values \texttt{v} that a signed immediate of \texttt{w} bits can have, is $-2^{\texttt{w}-1} \leq \texttt{v} \leq +2^{\texttt{w}-1}-1$, while the value range of unsigned immediates is restricted to $0 \leq \texttt{v} \leq +2^\texttt{w}-1$.
+Both constructors ensure that the immediate's value \texttt{v} is always within these abovementioned ranges.
+Otherwise, they produce a runtime error.
+As usual, both immediate classes come with proper copy and move constructors.
+
+\begin{lstlisting}[style=code,float=t,caption={Value Handling of Signed and Unsigned Immediates},label=lst:immvalue]
+// Set a signed immediate's actual value.
+virtual @void@ WIR_SignedImmediateParameter::setValue@( signed long long@ v @)@;Ü\label{lst:immvalue1}Ü
+
+// Get a signed immediate's actual value.
+@signed long long@ WIR_SignedImmediateParameter::getValue@( void )@ const;Ü\label{lst:immvalue2}Ü
+
+// Get a signed immediate's bit width.
+@unsigned int@ WIR_SignedImmediateParameter::getBitWidth@( void )@ const;Ü\label{lst:immvalue3}Ü
+
+// Get the minimal signed value that can be represented in two's-complement using the given number of bits.
+static @signed long long@ WIR_SignedImmediateParameter::getMinValue@( unsigned int@ w @)@;Ü\label{lst:immvalue4}Ü
+
+// Get the maximal signed value that can be represented in two's-complement using the given number of bits.
+static @signed long long@ WIR_SignedImmediateParameter::getMaxValue@( unsigned int@ w @)@;Ü\label{lst:immvalue5}Ü
+
+// Determine whether some immediate parameter is signed.
+virtual @bool@ WIR_SignedImmediateParameter::isSigned@( void )@ const;Ü\label{lst:immvalue6}Ü
+
+// Determine whether some immediate parameter is unsigned.
+virtual @bool@ WIR_SignedImmediateParameter::isUnsigned@( void )@ const;Ü\label{lst:immvalue7}Ü
+
+
+// Set an unsigned immediate's actual value.
+virtual @void@ WIR_UnsignedImmediateParameter::setValue@( unsigned long long@ v @)@;Ü\label{lst:immvalue8}Ü
+
+// Get an unsigned immediate's actual value.
+@unsigned long long@ WIR_UnsignedImmediateParameter::getValue@( void )@ const;Ü\label{lst:immvalue9}Ü
+
+// Get an unsigned immediate's bit width.
+@unsigned int@ WIR_UnsignedImmediateParameter::getBitWidth@( void )@ const;Ü\label{lst:immvalue10}Ü
+
+// Get the maximal unsigned value that can be represented using the given number of bits.
+static @unsigned long long@ WIR_UnsignedImmediateParameter::getMaxValue@( unsigned int@ w @)@;Ü\label{lst:immvalue11}Ü
+
+// Determine whether some immediate parameter is signed.
+virtual @bool@ WIR_UnsignedImmediateParameter::isSigned@( void )@ const;Ü\label{lst:immvalue12}Ü
+
+// Determine whether some immediate parameter is unsigned.
+virtual @bool@ WIR_UnsignedImmediateParameter::isUnsigned@( void )@ const;Ü\label{lst:immvalue13}Ü
+\end{lstlisting}
+
+\cref{lst:immvalue} shows the methods of classes \texttt{WIR\_SignedImmediateParameter} and \texttt{WIR\_UnsignedImmediate\-Parameter} that can be used to handle an immediate's actual value.
+The methods \texttt{setValue} (\cref{lst:immvalue1,lst:immvalue8}) set a signed or unsigned immediate's value, resp.
+Again, both methods ensure that the new value must fall into the abovementioned value ranges for the immediate's bit width.
+\texttt{getValue} (\cref{lst:immvalue2,lst:immvalue9}) and \texttt{getBitWidth} (\cref{lst:immvalue3,lst:immvalue10}) return an immediate's value and bit width, resp.
+The static methods \texttt{getMinValue} and \texttt{getMax\-Value} of class \texttt{WIR\_SignedImmediateParameter} (\cref{lst:immvalue4,lst:immvalue5}) provide the minimal and maximal signed values that can be represented using \texttt{w} bits, resp.
+Thus, these methods determine the bounds of the corresponding two's-complement value range.
+Likewise, method \texttt{WIR\_UnsignedImmediateParameter::getMaxValue} (\cref{lst:immvalue11}) returns the maximal possible unsigned value using \texttt{w} bits.
+A \texttt{getMinValue} method does not exist for unsigned immediates, since this minimal value is always 0.
+Finally, the methods \texttt{isSigned} (\cref{lst:immvalue6,lst:immvalue12}) and \texttt{isUnsigned} (\cref{lst:immvalue7,lst:immvalue13}) return whether an immediate is signed or unsigned, resp.
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Labels}
+\label{ssec:labparams}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Class \texttt{WIR\_LabelParameter} models parameters that act as a label, i.e., that refer to a symbolic memory address where some piece of code or data resides.
+Prime examples where labels come into play are branch or function call operations where the jump target or the called function is explicitly given as a label.
+Many architectures also feature memory load or store operations where the address to be read or written is also specified using the label of some (global) data object.
+These facets of label parameters lead to the constructors shown in \cref{lst:labparamconstruction}.
+The default constructors from \cref{lst:labparamconstruction1,lst:labparamconstruction2,lst:labparamconstruction3} receive a reference to a basic block, data object (cf. \cref{sec:data}), or a function as argument, resp.
+As usual, copy and move constructors also exist.
+
+\begin{lstlisting}[style=code,float=ht,caption={Constructors of Class \texttt{WIR\_LabelParameter}},label=lst:labparamconstruction]
+// Default constructor creating a label parameter referring to the given basic block.
+explicit WIR_LabelParameter::WIR_LabelParameter@(@ const WIR_BasicBlock æ&æb @)@;Ü\label{lst:labparamconstruction1}Ü
+
+// Default constructor creating a label parameter referring to the given data object.
+explicit WIR_LabelParameter::WIR_LabelParameter@(@ const WIR_Data æ&æd @)@;Ü\label{lst:labparamconstruction2}Ü
+
+// Default constructor creating a label parameter referring to the given function.
+explicit WIR_LabelParameter::WIR_LabelParameter@(@ const WIR_Function æ&æf @)@;Ü\label{lst:labparamconstruction3}Ü
+
+// Copy constructor.
+WIR_LabelParameter::WIR_LabelParameter@(@ const WIR_LabelParameter æ&æl @)@;Ü\label{lst:labparamconstruction4}Ü
+
+// Move constructor.
+WIR_LabelParameter::WIR_LabelParameter@(@ WIR_LabelParameter æ&&æl @)@;Ü\label{lst:labparamconstruction5}Ü
+\end{lstlisting}
+
+After its construction, the characteristics of a label parameter, i.e., whether it refers to a data object or a function etc. can be queried using method \texttt{getLabelType} (cf. \cref{lst:labtype1} of \cref{lst:labtype}).
+This method returns the appropriate element of the enumeration type \texttt{WIR\_SymbolType} as defined in \cref{lst:labtype2}.
+
+\begin{lstlisting}[style=code,float=!b,caption={Label Type Handling of Class \texttt{WIR\_LabelParameter}},label=lst:labtype]
+// Get a label's type.
+WIR_SymbolType WIR_LabelParameter::getLabelType@( void )@ const;Ü\label{lst:labtype1}Ü
+
+// Enum WIR_SymbolType represents different types of symbolic WIR addresses.
+enum class WIR_SymbolType : @char@Ü\label{lst:labtype2}Ü
+{
+  block,    // A symbol referring to a basic block.
+  data,     // A symbol referring to a data object.
+  function  // A symbol referring to a function.
+};
+\end{lstlisting}
+
+The actual object to which a label parameter refers can then be retrieved with the methods from \cref{lst:labref}.
+The methods \texttt{getBasicBlock}, \texttt{getData} and \texttt{getFunction} return a reference to the corresponding piece of code or data, resp.
+However, all these methods fail with a runtime error if the label's actual type as determined by \texttt{getLabelType} above is incompatible, e.g., if \texttt{getFunction} is called for a label parameter that actually refers to a basic block.
+
+\begin{lstlisting}[style=code,float=t,caption={Reference Handling of Class \texttt{WIR\_LabelParameter}},label=lst:labref]
+// Get the basic block to which a label refers, if any.
+WIR_BasicBlock æ&æWIR_LabelParameter::getBasicBlock@( void )@ const;Ü\label{lst:labref1}Ü
+
+// Get the data object to which a label refers, if any.
+WIR_Data æ&æWIR_LabelParameter::getData@( void )@ const;Ü\label{lst:labref2}Ü
+
+// Get the function to which a label refers, if any.
+WIR_Function æ&æWIR_LabelParameter::getFunction@( void )@ const;Ü\label{lst:labref3}Ü
+\end{lstlisting}
+
+The name of a label parameter can be obtained with method \texttt{getName} (cf. \cref{lst:labname}), which simply boils down to the strings returned by the \texttt{getName} methods of classes \texttt{WIR\_Function} (cf. \cref{lst:fctconstruction}), \texttt{WIR\_BasicBlock} (cf. \cref{lst:bbconstruction}) or \texttt{WIR\_Data} (cf.  \cref{lst:dataconstruction}), resp.
+
+\begin{lstlisting}[style=code,float=ht,caption={Name Handling of Class \texttt{WIR\_LabelParameter}},label=lst:labname]
+// Get the label name.
+ästd::stringä WIR_LabelParameter::getName@( void )@ const;Ü\label{lst:labname1}Ü
+\end{lstlisting}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Addressing Modes}
+\label{ssec:admodeparams}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+For some processor \glspl{ISA}, memory load or store operations could require the specification of some addressing mode, i.e., of the way how the machine computes the effective address to be loaded or stored from the parameters provided by the operation.
+Prominent examples of such addressing modes are \emph{Base + Offset} where the effective address is the sum of a base address residing in a register, and a constant offset, or \emph{Post-Increment Addressing} where the base address in some register is automatically incremented by a constant after the memory load or store.
+Such addressing modes are obviously highly \gls{ISA}-specific and are generally modeled by class \texttt{WIR\_BaseProcessor::AddressingMode} (cf. \cref{sssec:amodes}).
+However, in order to be able to specify such an addressing mode as parameter of a \gls{WIR} operation, class \texttt{WIR\_AddressingModeParameter} gets involved.
+Its construction requires a reference to the actual architecture-specific addressing mode (cf. \cref{lst:adrparamconstruction1} of \cref{lst:adrparamconstruction}).
+
+\begin{lstlisting}[style=code,float=ht,caption={Constructors of Class \texttt{WIR\_AddressingModeParameter}},label=lst:adrparamconstruction]
+// Default constructor creating a parameter using the given addressing mode.
+explicit WIR_AddressingModeParameter::WIR_AddressingModeParameter@(@ const WIR_BaseProcessor::AddressingMode                                                                   æ&æm @)@;Ü\label{lst:adrparamconstruction1}Ü
+
+// Copy constructor.
+WIR_AddressingModeParameter::WIR_AddressingModeParameter@(@ const WIR_AddressingModeParameter æ&æa @)@;Ü\label{lst:adrparamconstruction2}Ü
+
+// Move constructor.
+WIR_AddressingModeParameter::WIR_AddressingModeParameter@(@ WIR_AddressingModeParameter æ&&æa @)@;Ü\label{lst:adrparamconstruction3}Ü
+\end{lstlisting}
+
+Setting and getting a parameter's addressing mode can easily be done with the methods \texttt{setAddressingMode} and \texttt{getAddressingMode} from \cref{lst:adrmodeparam}.
+
+\begin{lstlisting}[style=code,float=t,caption={Mode Handling of Class \texttt{WIR\_AddressingModeParameter}},label=lst:adrmodeparam]
+// Set the addressing mode.
+@void@ WIR_AddressingModeParameter::setAddressingMode@(@ const WIR_BaseProcessor::AddressingMode æ&æm @)@;Ü\label{lst:adrmodeparam1}Ü
+
+// Get the actual addressing mode.
+WIR_BaseProcessor::AddressingMode æ&æWIR_AddressingModeParameter::getAddressingMode@( void )@;Ü\label{lst:adrmodeparam2}Ü
+\end{lstlisting}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{Condition Fields}
+\label{ssec:condparams}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+\emph{Conditional Execution} (also known as \emph{Predicated Execution}) is a concept supported by some \glspl{ISA} where machine operations are effectively evaluated only if some Boolean condition is satisfied.
+Such conditions then become integral part of machine operations and thus may also be specified as parameter.
+Very similar to addressing modes (cf. \cref{ssec:admodeparams}), such \gls{ISA}-specific conditions are generically represented by class \texttt{WIR\_BaseProcessor::Condi\-tion}, and class \texttt{WIR\_ConditionFieldParameter} then only serves as specialized parameter referring to such a condition.
+
+As a consequence, the public \gls{API} of \texttt{WIR\_ConditionFieldParameter} is equivalent to that of addressing mode parameters (cf. \cref{lst:condparam}) so that we omit its detailed discussion here for the sake of brevity.
+
+\begin{lstlisting}[style=code,float=ht,caption={Public Interface of Class \texttt{WIR\_ConditionFieldParameter}},label=lst:condparam]
+// Default constructor creating a parameter using the given condition.
+explicit WIR_ConditionFieldParameter::WIR_ConditionFieldParameter@(@ const WIR_BaseProcessor::Condition æ&æc @)@;Ü\label{lst:condparam1}Ü
+
+// Copy constructor.
+WIR_ConditionFieldParameter::WIR_ConditionFieldParameter@(@ const WIR_ConditionFieldParameter æ&æcf @)@;Ü\label{lst:condparam2}Ü
+
+// Move constructor.
+WIR_ConditionFieldParameter::WIR_ConditionFieldParameter@(@ WIR_ConditionFieldParameter æ&&æcf @)@;Ü\label{lst:condparam3}Ü
+
+// Set the condition.
+@void@ WIR_ConditionFieldParameter::setCondition@(@ const WIR_BaseProcessor::Condition æ&æc @)@;Ü\label{lst:condparam4}Ü
+
+// Get the actual condition.
+WIR_BaseProcessor::Condition æ&æWIR_ConditionFieldParameter::getCondition@( void )@;Ü\label{lst:condparam5}Ü
+\end{lstlisting}
+
+
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+\subsection{String Parameters}
+\label{ssec:strparams}
+% - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Finally, some \glspl{ISA} might -- in extremely rare cases -- feature operations with parameters that do not fit to any of the specialized parameter classes like, e.g., register or label parameters.
+Such situations can happen if a standardized processor architecture is extensible by co-processors or special-purpose registers which are not part of the architecture's \gls{ISA} itself.
+In such a scenario, machine operations need to pass non-standard opcodes and register arguments to such a co-processor, while these opcodes or registers might not be captured by the well-structured \gls{WIR} classes introduced up to this point.
+
+In order to also model such non-standard parameters, \gls{WIR} provides the class \texttt{WIR\_StringParameter} which allows to use arbitrary unstructured C++ strings as operation parameters.
+Not surprisingly, the constructors of this class expect the unstructured string as argument, cf. \cref{lst:strparamconstruction1,lst:strparamconstruction2} of \cref{lst:strparamconstruction}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Constructors of Class \texttt{WIR\_StringParameter}},label=lst:strparamconstruction]
+// Default constructor creating a parameter with a copied string.
+explicit WIR_StringParameter::WIR_StringParameter@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:strparamconstruction1}Ü
+
+// Default constructor creating a parameter with a moved string.
+explicit WIR_StringParameter::WIR_StringParameter@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:strparamconstruction2}Ü
+
+// Copy constructor.
+WIR_StringParameter::WIR_StringParameter@(@ const WIR_StringParameter æ&æsp @)@;Ü\label{lst:strparamconstruction3}Ü
+
+// Move constructor.
+WIR_StringParameter::WIR_StringParameter@(@ WIR_StringParameter æ&&æsp @)@;Ü\label{lst:strparamconstruction4}Ü
+\end{lstlisting}
+
+After its construction, a parameter's string can be set and retrieved using methods \texttt{setString} and \texttt{getString}, cf. \cref{lst:strparam}.
+
+\begin{lstlisting}[style=code,float=!ht,caption={String Handling of Class \texttt{WIR\_StringParameter}},label=lst:strparam]
+// Set parameter to a copied string.
+@void@ WIR_StringParameter::setString@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:strparam1}Ü
+
+// Set parameter to a moved string.
+@void@ WIR_StringParameter::setString@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:strparam2}Ü
+
+// Get the parameter's string.
+ästd::stringä WIR_StringParameter::getString@( void )@ const;Ü\label{lst:strparam3}Ü
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Data Objects and Their Initializers}
+\label{sec:data}
+%-------------------------------------------------------------------------
+
+\begin{lstlisting}[style=code,float=!b,caption={Constructors and Methods for Name Handling of Class \texttt{WIR\_Data}},label=lst:dataconstruction]
+// Default constructor creating a data object with a copied string as name.
+explicit WIR_Data::WIR_Data@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:dataconstruction1}Ü
+
+// Default constructor creating a data object with a moved string as name.
+explicit WIR_Data::WIR_Data@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:dataconstruction2}Ü
+
+// Copy constructor.
+WIR_Data::WIR_Data@(@ const WIR_Data æ&æd @)@;Ü\label{lst:dataconstruction3}Ü
+
+// Move constructor.
+WIR_Data::WIR_Data@(@ WIR_Data æ&&æd @)@;Ü\label{lst:dataconstruction4}Ü
+
+// Set data object name to a copied string.
+@void@ WIR_Data::setName@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:dataconstruction5}Ü
+
+// Set data object name to a moved string.
+@void@ WIR_Data::setName@(@ ästd::stringä æ&&æs @)@;Ü\label{lst:dataconstruction6}Ü
+
+// Get the data object's name.
+ästd::stringä WIR_Data::getName@( void )@ const;Ü\label{lst:dataconstruction7}Ü
+\end{lstlisting}
+
+While all the classes presented in the previous \crefrange{sec:compilationunits}{sec:parameters} represent code within the \gls{WIR} software model, data regularly is managed either in a system's stack at a low abstraction level, or resides in some dedicated memory areas.
+Usually, local variables that are visible only within individual functions or in even smaller scopes is managed via the stack.
+All other kinds of data with a scope larger than local variables like, e.g., global variables, reside in dedicated memory areas and are modeled as so-called data objects within \gls{WIR}.
+More generally, class \texttt{WIR\_Data} is the generic representation of any kind of data objects that are not allocated on a system's stack.
+
+Class \texttt{WIR\_Data} comes with the standard set of constructors and the usual methods to set and get its name as shown in \cref{lst:dataconstruction}.
+A data object's byte size in memory can be set and retrieved using the methods \texttt{setSize} and \texttt{getSize} shown in \cref{lst:datasize}.
+
+\begin{lstlisting}[style=code,float=t,caption={Size Computation by Class \texttt{WIR\_Data}},label=lst:datasize]
+// Set a data object's byte size.
+@void@ WIR_Data::setSize@(@ ästd::size_tä s @)@;Ü\label{lst:datasize1}Ü
+
+// Get a data object's byte size.
+ästd::size_tä WIR_Data::getSize@( void )@ const;Ü\label{lst:datasize2}Ü
+\end{lstlisting}
+
+The main purpose of class \texttt{WIR\_Data} -- besides simply occupying a certain amount of bytes in some memory -- is to manage all the values that are used to initialize a data object, if any.
+Such initializers are represented by class \texttt{WIR\_DataInit}, and a data object provides the list \gls{API} shown in \cref{lst:datainit} for the handling of such initializers.
+
+\begin{lstlisting}[style=code,float=h,caption={Initializer Handling of Class \texttt{WIR\_Data}},label=lst:datainit]
+// Determine whether a data object is initialized.
+@bool@ WIR_Data::isInitialized@( void )@ const;Ü\label{lst:datainit1}Ü
+
+// Copy-add a new initializer at the end of a list, after its current last element.
+WIR_DataInit WIR_Data::pushBackInitData@(@ const WIR_DataInit æ&æi @)@;Ü\label{lst:datainit2}Ü
+
+// Move-add a new initializer at the end of a list, after its current last element.
+WIR_DataInit WIR_Data::pushBackInitData@(@ WIR_DataInit &&i @)@;Ü\label{lst:datainit3}Ü
+
+// Get the full list of references to all initializers.
+ästd::listäæ<æästd::reference_wrapperäæ<æWIR_DataInitæ>> &æWIR_Data::getInitData@( void )@ const;Ü\label{lst:datainit4}Ü
+
+// Remove all initializers.
+@void@ WIR_Data::clearInitData@( void )@;Ü\label{lst:datainit5}Ü
+
+// Fold subsequent space entries in the initializer list into one combined space entry.
+@void@ WIR_Data::foldSpaces@( void )@;Ü\label{lst:datainit6}Ü
+\end{lstlisting}
+
+Method \texttt{isInitialized} (cf. \cref{lst:datainit1}) can be used to check whether a data object is initialized at all.
+The following methods to add, get and clear initializers (\crefrange{lst:datainit2}{lst:datainit5}) behave identical to what has been described earlier in \cref{chap:lists}.
+In case that only some parts of a data object are initialized, so-called space initializers need to be added for the uninitialized parts.
+If several of these space initializers directly follow each other within a data object, they can be turned into a single one by applying method \texttt{foldSpaces} from \cref{lst:datainit6}.
+
+Within \gls{WIR}, initializers carry a certain type that basically specifies how much memory gets initialized, and of course the actual initialization value(s).
+This is reflected by the variadic default constructor of class \texttt{WIR\_DataInit} shown in \cref{lst:initconstruction1} of \cref{lst:initconstruction}.
+It expects a specifier of an initializer's type as first argument and one or several references to strings holding the initialization values next.
+Initializer types are represented by the enumeration type \texttt{WIR\_DataInitType} (cf. \crefrange{lst:initconstruction5}{lst:initconstruction6}), and they represent, e.g., string literals, byte, half-word or word literals, or floating-point literals.
+Technically, such initializers refer to specific assembly code directives, and the elements of \texttt{WIR\_DataInitType} directly match with the directives supported by GNU-compatible assemblers.
+
+The variadic constructor from \cref{lst:initconstruction1} should not be used for uninitialized spaces inside some data object, i.e., it should not be applied for initialization type \texttt{ispace}.
+Instead, the constructor from \cref{lst:initconstruction2} should be chosen for this purpose.
+This constructor expects the number of bytes to be left uninitialized as only argument.
+As usual, copy and move constructors are also provided (\cref{lst:initconstruction3,lst:initconstruction4}).
+
+\begin{lstlisting}[style=code,float=t,caption={Constructors of Class \texttt{WIR\_DataInit}},label=lst:initconstruction]
+// Variadic default constructor creating an initializer of a certain type.
+templateæ<ætypename... Argsæ>æ WIR_DataInit::WIR_DataInit@(@ WIR_DataInitType t, const ästd::stringä æ&æs,                                                                 const Argsæ&...æ __args @)@;Ü\label{lst:initconstruction1}Ü
+
+// Default constructor creating a space initializer.
+explicit WIR_DataInit::WIR_DataInit@(@ ästd::size_tä s @)@;Ü\label{lst:initconstruction2}Ü
+
+// Copy constructor.
+WIR_DataInit::WIR_DataInit@(@ const WIR_DataInit æ&æi @)@;Ü\label{lst:initconstruction3}Ü
+
+// Move constructor.
+WIR_DataInit::WIR_DataInit@(@ WIR_DataInit æ&&æi @)@;Ü\label{lst:initconstruction4}Ü
+
+// Enum WIR_DataInitType represents different types of WIR initializers.
+enum class WIR_DataInitType : @char@Ü\label{lst:initconstruction5}Ü
+{
+  iascii,   // A string literal initializer.
+  iasciz,   // A zero-terminated string literal initializer.
+  ibyte,    // A byte literal initializer.
+  idouble,  // A double-precision float literal initializer.
+  idword,   // A double-word literal initializer.
+  ifloat,   // A single-precision float literal initializer.
+  ihword,   // A half-word literal initializer.
+  ishort,   // A short-word literal initializer.
+  ispace,   // No initializer literal, only some skipped space.
+  isymbol,  // A symbolic pointer literal initializer.
+  iword     // A word literal initializer.
+};Ü\label{lst:initconstruction6}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!b,caption={Initializer Handling and String Processing of Class \texttt{WIR\_DataInit}},label=lst:inithandling]
+// Get an initializer's type.
+WIR_DataInitType WIR_DataInit::getType@( void )@ const;Ü\label{lst:inithandling1}Ü
+
+// Get all initialization literals.
+const ästd::list<std::string>ä æ&æWIR_DataInit::getValues@( void )@ const;Ü\label{lst:inithandling2}Ü
+
+// Get the number of bytes skipped in initialization.
+ästd::size_tä WIR_DataInit::getSpace@( void )@ const;Ü\label{lst:inithandling3}Ü
+
+// Replace special characters in a string by escaped versions.
+static ästd::stringä WIR_DataInit::escapeString@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:inithandling4}Ü
+
+// Replace escaped character sequences in a string by special characters.
+static ästd::stringä WIR_DataInit::unescapeString@(@ const ästd::stringä æ&æs @)@;Ü\label{lst:inithandling5}Ü
+\end{lstlisting}
+
+The attributes assigned to an initializer during its construction can be retrieved using the methods shown in \cref{lst:inithandling}.
+Method \texttt{getType} (cf. \cref{lst:inithandling1}) returns an initializer's type as encoded by the enumeration \texttt{WIR\_DataInit\-Type}.
+All actual initialization values can be accessed using method \texttt{getValues} (\cref{lst:inithandling2}).
+This method returns a reference to a list of strings containing all initializer literals that have been passed to the variadic default constructor above.
+For initializers representing some uninitialized space, method \texttt{getSpace} (\cref{lst:inithandling3}) can be used to obtain the number of bytes left uninitialized.
+
+As class \texttt{WIR\_DataInit} solely uses string literals to represent initialization values for the sake of simplicity, two static convenience methods for string handling are furthermore provided.
+Depending on the nature of assembly code that shall be created using the \gls{WIR} library, string literals may contain non-printable special characters like, e.g., line feeds or tabs, or not.
+If such special characters shall be avoided, method \texttt{escapeString} (\cref{lst:inithandling4}) can be used which replaces non-printable characters by escape sequences such as \texttt{"\textbackslash{}n"} or \texttt{"\textbackslash{}t"}.
+The reverse conversion from strings containing escape sequences to strings with non-printable special characters is realized by method \texttt{unescapeString} (\cref{lst:inithandling5}).
+
+
+\cleardoubleoddpage

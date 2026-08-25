@@ -1,0 +1,999 @@
+%=========================================================================
+\chapter{Code Optimization}
+\label{chap:optimization}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+This chapter briefly describes all available optimizations that are integral part of the \gls{WIR} library.
+\cref{sec:opt} first introduces the generic base classes that form the optimization framework within \gls{WIR}.
+Hereafter, \crefrange{sec:optvregs}{sec:optwebs} present entirely generic and processor-independent cleanup and optimizations passes: unused virtual registers, empty blocks, redundant blocks, unreachable blocks, loop-invariant code motion, webs.
+Processor-specific optimizations for which realizations for the RISC-V and TriCore \glspl{ISA} exist are subject to \crefrange{sec:optregalloc}{sec:optcfold}: register allocation, dead code, constant folding.
+Finally, the currently entirely TriCore-specific optimizations are presented in \crefrange{sec:optcprop}{sec:optsched}: constant propagation, redundant code, jump correction, operation bit widths, predicated execution, peephole, instruction scheduling.
+
+
+%-------------------------------------------------------------------------
+\section{Generic Optimization Framework}
+\label{sec:opt}
+%-------------------------------------------------------------------------
+
+Similar to the code analyses from \cref{chap:analysis}, all \gls{WIR} optimizations also inherit from a common base class, which is \texttt{WIR\_Optimization} declared in file \texttt{WIR/optimizations/generic/wiroptimization.h}.
+The public interface of this base class is shown in \cref{lst:wiropt}.
+
+\begin{lstlisting}[style=code,float=ht,caption={Code Optimization API of Class \texttt{WIR\_Optimization}},label=lst:wiropt]
+// Default constructor for system-level optimization.
+explicit WIR_Optimization::WIR_Optimization@(@ WIR_System æ&æs @)@;Ü\label{lst:wiropt1}Ü
+
+// Default constructor for compilation unit-level optimization.
+explicit WIR_Optimization::WIR_Optimization@(@ WIR_CompilationUnit æ&æc @)@;Ü\label{lst:wiropt2}Ü
+
+// Default constructor for function-level optimization.
+explicit WIR_Optimization::WIR_Optimization@(@ WIR_Function æ&æf @)@;Ü\label{lst:wiropt3}Ü
+
+// Default constructor for basic block-level optimization.
+explicit WIR_Optimization::WIR_Optimization@(@ WIR_BasicBlock æ&æb @)@;Ü\label{lst:wiropt4}Ü
+
+// Default constructor for instruction-level optimization.
+explicit WIR_Optimization::WIR_Optimization@(@ WIR_Instruction æ&æi @)@;Ü\label{lst:wiropt5}Ü
+
+// Default constructor for operation-level optimization.
+explicit WIR_Optimization::WIR_Optimization@(@ WIR_Operation æ&æo @)@;Ü\label{lst:wiropt6}Ü
+
+// Performs the actual code optimization.
+@void@ WIR_Optimization::optimize@( void )@;Ü\label{lst:wiropt7}Ü
+
+// Set whether an optimization shall generate 16 bits wide operations.
+@void@ WIR_Optimization::setGenerate16BitOperations@( bool@ f æ=æ true @)@;Ü\label{lst:wiropt8}Ü
+
+// Determine whether an optimization shall generate 16 bits wide operations.
+@bool@ WIR_Optimization::getGenerate16BitOperations@( void )@ const;Ü\label{lst:wiropt9}Ü
+\end{lstlisting}
+
+Again, various constructors can be chosen which determine whether an optimization shall be carried out for a complete \gls{WIR} system (cf. \cref{lst:wiropt1}), or just for a single compilation unit, function, basic block etc. (\crefrange{lst:wiropt2}{lst:wiropt6}).
+Hereafter, only the \texttt{optimize} method from \cref{lst:wiropt7} needs to be invoked in order to apply the actual optimization to the \gls{WIR} object used during construction.
+
+The \glspl{ISA} of many processor architectures allow to freely mix instructions of different bit widths with each other.
+Whether or not such mixtures shall be exploited by a \gls{WIR} optimization can be specified using method \texttt{setGener\-ate16BitOperations} (\cref{lst:wiropt8}), and the current status of this optimization property can be checked via \texttt{getGen\-erate16BitOperations} (\cref{lst:wiropt9}).
+
+Some of the optimziations presented in the following base on the bit-true data flow analysis presented in \cref{sec:bitdflow}.
+Instead of base class \texttt{WIR\_Optimization} above, such bit-level optimizations inherit from a base class \texttt{WIR\_BitOpt}, which in turn is derived from \texttt{WIR\_Optimization}.
+Its public \gls{API} is shown in \cref{lst:wirbitopt}.
+Besides the straightforward constructors from \crefrange{lst:wirbitopt1}{lst:wirbitopt3}, only method \texttt{setRunDFA} (\cref{lst:wirbitopt4}) is novel for bit-level optimizations.
+It can be used to specify whether a bit-true data flow analysis shall explicitly be carried out prior to the actual optimization, or not.
+
+The data flow analysis from \cref{sec:bitdflow} can be computationally expensive so that reapplying it after each code optimization would not be ideal.
+For this reason, the bit-level optimizations discussed in this chapter -- esp. dead code elimination (\cref{sec:optdce}), constant folding (\cref{sec:optcfold}) and propagation (\cref{sec:optcprop}), redundant code elimination (\cref{sec:optredundantcode}) -- can be told not to do a data flow analysis on their own.
+Instead, they reuse \texttt{WIR\_BitValue} containers that were already attached to \gls{WIR} constructs earlier, and the bit-level optimizations are designed such that these existing containers simply get updated by novel down and up values after some code modification.
+
+\begin{lstlisting}[style=code,float=t,caption={Bit-Level Optimization API of Class \texttt{WIR\_BitOpt}},label=lst:wirbitopt]
+// Default constructor for system-level optimization.
+explicit WIR_BitOpt::WIR_BitOpt@(@ WIR_System æ&æs @)@;Ü\label{lst:wirbitopt1}Ü
+
+// Default constructor for compilation unit-level optimization.
+explicit WIR_BitOpt::WIR_BitOpt@(@ WIR_CompilationUnit æ&æc @)@;Ü\label{lst:wirbitopt2}Ü
+
+// Default constructor for function-level optimization.
+explicit WIR_BitOpt::WIR_BitOpt@(@ WIR_Function æ&æf @)@;Ü\label{lst:wirbitopt3}Ü
+
+// Set whether an optimization shall generate 16 bits wide operations.
+@void@ WIR_BitOpt::setRunDFA@( bool@ f æ=æ true @)@;Ü\label{lst:wirbitopt4}Ü
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Unused Virtual Register Elimination}
+\label{sec:optvregs}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_UnusedVRegs} & Systems -- Functions & Generic, all \\
+  \hline
+\end{tabular}
+
+As introduced earlier in \cref{sec:functions} (cf. \cpageref{sec:functions}), virtual registers are managed at the level of code functions within \gls{WIR}.
+Class \texttt{WIR\_UnusedVRegs} (see file \texttt{WIR/optimizations/unusedvregs/wirunusedvregs.h}) now provides a pass that removes all virtual registers from their functions that are not at all defined or used somewhere, i.e., which do not occur as register parameter in some \gls{WIR} operation.
+This pass intends to keep some \gls{WIR}-internal data structures as small as possible in order to speed up subsequent liveness analyses and register allocation passes.
+
+This cleanup pass can be applied to \gls{WIR} systems, compilation units or functions.
+Due to its simplicity, the public \gls{API} of class \texttt{WIR\_UnusedVRegs} contains no extensions beyond what is shown in \cref{lst:wiropt}.
+This class does not require any processor-specific adaptations, it can be applied generically for all processor models from \cref{chap:hwmodel}.
+
+
+%-------------------------------------------------------------------------
+\section{Empty Basic Block Elimination}
+\label{sec:optemptybbs}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_EmptyBlocks} & Systems -- Functions & Generic, all \\
+  \hline
+\end{tabular}
+
+Empty basic blocks are blocks that contain no instructions, or only empty instructions without operations.
+Such empty blocks are fully redundant and are eliminated by class \texttt{WIR\_EmptyBlocks} from file \texttt{WIR/optimizations/ emptyblocks/wiremptyblocks.h}.
+For this purpose, the first non-empty successor block is determined, and all occurrences of the empty block's label are replaced by this successor.
+Likewise, flow facts referring to the empty block (cf. \cref{sec:flowfacts}) are also shifted towards the successor, as are any other containers that are attached to the empty block.
+This pass simplifies a function's \gls{CFG} and thus aims to speed up the iterative data flow analyses from \cref{chap:analysis}.
+
+There is nothing to mention regarding the interface of class \texttt{WIR\_EmptyBlocks}, \cref{lst:wiropt} describes all available methods.
+
+
+%-------------------------------------------------------------------------
+\section{Redundant Basic Block Elimination}
+\label{sec:optredundantbbs}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_RedundantBlocks} & Systems -- Functions & Generic, all \\
+  \hline
+\end{tabular}
+
+According to \cref{def:bb}, a basic block is a \emph{maximal} instruction sequence that always gets executed sequentially from its very first to its very last instruction.
+Two basic blocks $b_1$ and $b_2$ that directly follow each other within their owning \gls{WIR} function are redundant if
+\begin{itemize}
+  \item $b_1$ has exactly one successor, which is $b_2$, and
+  \item $b_2$ has exactly one predecessor, which is $b_1$, and
+  \item $b_2$ is the immediate successor of $b_1$.
+\end{itemize}
+$b_2$ being immediate successor of $b_1$ means that after the execution of the very last instruction of $b_1$, directly the first instruction of $b_2$ is executed without any other control flow deviations in between.
+For example, $b_1$ could end with a jump explicitly branching to $b_2$, and $b_2$ would then be immediate successor of $b_1$.
+If, however, $b_1$ ends with a function call, $b_2$ is not immediate successor since the code of the called function gets executed in between.
+
+The presence of redundant blocks implies that the requirement of \cref{def:bb} to be a maximal instruction sequence is violated.
+The simplification pass from class \texttt{WIR\_RedundantBlocks} (see file \texttt{WIR/optimizations/ redundantblocks/wirredundantblocks.h}) thus removes the potentially existing branch from $b_1$ to $b_2$ and moves all instructions from $b_2$ to the tail of $b_1$ afterwards.
+This way, $b_2$ becomes empty and gets eliminated next, see \cref{sec:optemptybbs}.
+
+
+%-------------------------------------------------------------------------
+\section{Unreachable Basic Block Elimination}
+\label{sec:optunreachablebbs}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_UnreachableBlocks} & Systems -- Functions & Generic, all \\
+  \hline
+\end{tabular}
+
+A basic block $b$ is called unreachable if there is no directed path in a function's \gls{CFG} from its unique entry point to $b$.
+Such unreachable blocks never get executed and thus can be eliminated completely.
+
+This is done by class \texttt{WIR\_UnreachableBlocks} (cf. file \texttt{WIR/optimizations/unreachableblocks/wirun\-reachableblocks.h}).
+The optimization can be applied to \gls{WIR} systems, compilation units, or functions.
+It again is processor-independent and generic, and the class has no specific public \gls{API} that requires a discussion here.
+
+
+%-------------------------------------------------------------------------
+\section{Loop-Invariant Code Motion}
+\label{sec:optlicm}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_LoopInvariantCM} & Systems -- Functions & Generic, all \\
+  \hline
+\end{tabular}
+
+Loop-invariant code motion is a very powerful optimization that identifies instructions within loops that are loop-invariant, i.e., that do not at all depend on the surrounding loop's behavior.
+In such a situation, repetitively executing loop-invariant code is highly inefficient since it is sufficient to execute such code just once before the loop.
+The goal of this optimization thus is to move as many instructions as possible out of loops.
+
+Within \gls{WIR}, loop-invariant code motion is realized by class \texttt{WIR\_LoopInvariantCM} (cf. file \texttt{WIR/optimizati\-ons/loopinvariantcm/wirloopinvariantcm.h}) as an entirely generic and processor-independent optimization.
+Its implementation closely follows the concepts of~\cite[chapter~13.2]{Much97} according to which an operation is loop-invariant if, for each of its parameters:
+\begin{enumerate}
+  \item the parameter is constant, or
+  \item all definitions that reach this use of the parameter are located outside the current loop, or
+  \item there is exactly one definition of the parameter that reaches the operation, and that definition is an operation inside the loop that is itself loop-invariant.
+\end{enumerate}
+Operations that realize function calls or returns, jumps, or that have any other side effects are never considered loop-invariant.
+
+The public interface of class \texttt{WIR\_LoopInvariantCM} is identical to \cref{lst:wiropt}, its constructors allow to apply loop-invariant code motion to \gls{WIR} systems, compilation units or individual functions.
+
+
+%-------------------------------------------------------------------------
+\section{Web Generation}
+\label{sec:optwebs}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_Webs} & Systems -- Functions & Generic, all \\
+  \hline
+\end{tabular}
+
+A web for a virtual register is the maximal union of intersecting def-use chains (see \cref{def:duchain} on \cpageref{def:duchain}) for that register~\cite[chapter~8.10]{Much97}.
+Hereby, two def-use chains intersect if they have a use in common~\cite[chapter~16.3.3]{Much97}.
+The web generation pass of \gls{WIR} detects webs for a virtual register and then replaces that original register by a novel virtual register for each individual web found.
+Webs are particularly useful in global register allocation by graph coloring (see \cref{sec:optregalloc}) -- they are the units that are candidates for allocation to physical registers.
+
+The main effect of constructing webs is to separate uses of a variable with a name like, e.g., \texttt{i} that may be used over and over again in a procedure as, say, a loop index, but whose uses are disjoint from each other.
+This can significantly improve register allocation by reducing the range over which a virtual register may require a physical register and can improve the effectiveness of other optimizations as well.
+
+Class \texttt{WIR\_Webs} exploits \gls{WIR}'s generic reaching definitions and def-use chain analyses from \cref{sec:reachdef,sec:duudchains} so that this optimization in turn is entirely generic and processor-independent.
+Its public interface is documented in \cref{lst:wiroptwebs}.
+Besides the default constructors from \crefrange{lst:wiroptwebs1}{lst:wiroptwebs3}, there is only method \texttt{getWebs} (cf. \cref{lst:wiroptwebs4}) which returns the list of all identified webs.
+A web is modeled by the struct seen in \cref{lst:wiroptwebs5}, i.e., it consists of the set of all register parameter being definitions of the web, and the parameter set of all its uses.
+
+\begin{lstlisting}[style=code,float=t,caption={Public Interface of Class \texttt{WIR\_Webs}},label=lst:wiroptwebs]
+// Default constructor for system-level optimization.
+explicit WIR_Webs::WIR_Webs@(@ WIR_System æ&æs @)@;Ü\label{lst:wiroptwebs1}Ü
+
+// Default constructor for compilation unit-level optimization.
+explicit WIR_Webs::WIR_Webs@(@ WIR_CompilationUnit æ&æc @)@;Ü\label{lst:wiroptwebs2}Ü
+
+// Default constructor for function-level optimization.
+explicit WIR_Webs::WIR_Webs@(@ WIR_Function æ&æf @)@;Ü\label{lst:wiroptwebs3}Ü
+
+// Get the list of all identified and transformed webs.
+ästd::listäæ<æstruct WIR_Webs::Webæ>æ WIR_Webs::getWebs@( void )@ const;Ü\label{lst:wiroptwebs4}Ü
+
+// Struct Web represents a web for some virtual register and distinguishes between its definitions and uses.
+struct WIR_Webs::WebÜ\label{lst:wiroptwebs5}Ü
+{
+  public:
+
+    WIR_RegisterParameterSet defs;
+    WIR_RegisterParameterSet uses;
+};
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Graph Coloring-Based Register Allocation}
+\label{sec:optregalloc}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_GraphColoring}, & Systems -- Functions & RV32IMFC, \\
+  \texttt{RV\_GraphColoring}, \texttt{TC\_GraphColoring} & & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+The \gls{WIR} register allocator is a generic, processor-independent reference implementation of the graph coloring allocator according to~\cite{Brig92}.
+The graph to be colored is the \gls{IG} which is defined as follows:
+
+\begin{definition}[\acrlong{IG}] \label{def:igraph}
+  Let $f$ be a \gls{WIR} function and $R_V = \{ r_1, \dots, r_n \}$ be the set of all virtual registers of $f$.
+  Let $R_P = \{ R_1, \dots, R_K \}$ be the set of all physical registers of a processor architecture.
+
+  An \emph{interference graph} $\textit{IG} = (V, E)$ is an undirected graph with
+  \begin{itemize}
+    \item $V = R_V \bigcup R_P$,
+    \item $E = \{$ $\{v, w\}$ $\vert$ $v$ and $w$ may never share the same physical register, i.e., $v$ and $w$ interfere $\}$.
+  \end{itemize}
+\end{definition}
+
+The nodes of the \gls{IG} represent all virtual and physical registers, and edges are introduced whenever either liveness analysis (cf. \cref{sec:liveness}) or processor-specific constraints mandate that two graph nodes must not be assigned to the same physical register.
+
+Using this \gls{IG}, a Graph Coloring is defined as follows:
+\begin{definition}[Graph Coloring] \label{def:gc}
+  Let $\textit{IG} = (V, E)$ be an interference graph, $K \in \mathbb{N}$ be a non-zero positive integer.
+
+  \emph{Graph Coloring} denotes the problem to assign each node $v \in V$ one color $k_v \in \{ 1, \dots, K \}$ such that \\
+  \verb|  |$\forall e = \{v, w\} \in E: k_v \not= k_w$ \\
+  I.e., no two adjacent nodes in the \gls{IG} may have the same color.
+\end{definition}
+
+A register allocator based on graph coloring now assumes that each physical register of a processor architecture represents one specific color so that a total of $K$ colors is available where $K$ equals the number of physical processor registers.
+A graph colored according to \cref{def:gc} thus provides a valid mapping of virtual registers to colors, i.e., to physical registers.
+In the real life, many \glspl{IG} are not colorable due to high degrees of nodes.
+In such situations, the register allocator must take a decision which node to spill into the system's main memory in order to render the remaining graph colorable.
+
+\begin{lstlisting}[style=code,float=t,caption={Constructors of Class \texttt{WIR\_GraphColoring}},label=lst:wirgcconstr]
+// Default constructor for system-level optimization.
+WIR_GraphColoring::WIR_GraphColoring@(@ WIR_System æ&æs, @bool@ v æ=æ false @)@;Ü\label{lst:wirgcconstr1}Ü
+
+// Default constructor for compilation unit-level optimization.
+WIR_GraphColoring::WIR_GraphColoring@(@ WIR_CompilationUnit æ&æc, @bool@ v æ=æ false @)@;Ü\label{lst:wirgcconstr2}Ü
+
+// Default constructor for function-level optimization.
+WIR_GraphColoring::WIR_GraphColoring@(@ WIR_Function æ&æf, @bool@ v æ=æ false @)@;Ü\label{lst:wirgcconstr3}Ü
+
+// Determine whether verbose messages shall be printed.
+@bool@ WIR_GraphColoring::getVerbosity@( void )@;Ü\label{lst:wirgcconstr4}Ü
+\end{lstlisting}
+
+The implementation of the \gls{WIR} register allocator closely follows the concepts and algorithms presented in~\cite[chapter~16.3]{Much97} and~\cite[chapter~11]{Appel04}.
+Its main features are:
+\begin{description}
+  \item[Maximal genericity] of all key algorithms regarding interference graph creation, simplification, decisions on coloring and spilling etc.
+  The allocator supports any kind of register hierarchies and precolorings as described in \cref{chap:swmodel}.
+  Processor-specific details like, e.g., specification of caller- or callee-saved registers, processor-specific interferences, generation of actuall spill code, are properly separated from the allocator's main algorithms.
+  \item[Live range splitting] of virtual registers is integrated into register allocation by exploiting the web generating pass from \cref{sec:optwebs}.
+  \item[Spill cost computation] takes the places where a virtual register is defined, used, or copied into account.
+  \item[Various spilling heuristics] can be used to decide which virtual register actually gets spilled, such as Chaitin's rule~\cite[Eq.~(2.1)]{Brig92} considering the degree of a virtual register in the interference graph, or the three heuristics proposed by Bernstein~\cite{BGM+89} that consider the degrees of nodes in the interference graph as well as the loop nesting depths of operations or the number of live webs.
+  A best-of-three spilling based on all heuristics originally proposed by Bernstein can also be activated.
+  \item[Stack coalescing] re-uses stack locations for the spilling of several virtual registers that are not simultaneously alive.
+  \item[Coalescing] of virtual registers involved in register-register moves takes loop nesting depths into account.
+  Safe coalescing according to Briggs' and George's heuristics can be applied, which eliminates a vast amount of register-register moves from \gls{WIR} code.
+\end{description}
+All these concepts are realized within the abstract base class \texttt{WIR\_GraphColoring} (cf. file \texttt{WIR/optimiza\-tions/gcregallocation/wirgraphcoloring.h}).
+Its constructors are depicted in \cref{lst:wirgcconstr} -- as can be seen, they enable register allocation in complete \gls{WIR} systems, compilation units, or in individual functions.
+All constructors support an optional Boolean argument defaulting to \texttt{false} that controls whether verbose or progress messages shall be produced.
+Whether or not such messages will be produced can be queried via method \texttt{getVerbosity} (cf. \cref{lst:wirgcconstr4}).
+
+The various features of the \gls{WIR} register allocator can selectively be turned on or off using the methods shown in \cref{lst:wirgcfeatures}.
+The various \texttt{set} methods all require a Boolean argument defaulting to \texttt{true} which means that a certain feature of the register allocator gets activated.
+The current activation state of some feature can be retrieved with the help of the \texttt{get} methods from \cref{lst:wirgcfeatures}.
+
+For instance, live range splitting by generating webs can be activated or deactivated using method \texttt{setGenerate\-Webs} (cf. \cref{lst:wirgcfeatures1}).
+By default, the generation of webs is always activated during the construction of a register allocator object.
+
+\begin{lstlisting}[style=code,float=!t,caption={Feature Activation of Class \texttt{WIR\_GraphColoring}},label=lst:wirgcfeatures]
+// Set whether the splitting of virtual registers into webs shall be activated.
+@void@ WIR_GraphColoring::setGenerateWebs@( bool@ w æ=æ true @)@;Ü\label{lst:wirgcfeatures1}Ü
+
+// Determine whether the splitting of virtual registers into webs is activated.
+@bool@ WIR_GraphColoring::getGenerateWebs@( void )@;Ü\label{lst:wirgcfeatures2}Ü
+
+// Set whether the best-of-three spilling heuristic by Bernstein shall be activated.
+@void@ WIR_GraphColoring::setBestOfThreeSpilling@( bool@ b æ=æ true @)@;Ü\label{lst:wirgcfeatures3}Ü
+
+// Determine whether the best-of-three spilling heuristic by Bernstein is activated.
+@bool@ WIR_GraphColoring::getBestOfThreeSpilling@( void )@;Ü\label{lst:wirgcfeatures4}Ü
+
+// Set whether full spilling of all virtual registers shall be activated.
+@void@ WIR_GraphColoring::setSpillAll@( bool@ s æ=æ true @)@;Ü\label{lst:wirgcfeatures5}Ü
+
+// Determine whether full spilling of all virtual registers is activated.
+@bool@ WIR_GraphColoring::getSpillAll@( void )@;Ü\label{lst:wirgcfeatures6}Ü
+
+// Set whether all generated spill instructions shall be marked with a dedicated comment.
+@void@ WIR_GraphColoring::setMarkSpillCode@( bool@ m æ=æ true @)@;Ü\label{lst:wirgcfeatures7}Ü
+
+// Determine whether all generated spill instructions are marked with a dedicated comment.
+@bool@ WIR_GraphColoring::getMarkSpillCode@( void )@;Ü\label{lst:wirgcfeatures8}Ü
+
+// Set whether stack coalescing of spills shall be activated.
+@void@ WIR_GraphColoring::setCoalesceStackLocations@( bool@ c æ=æ true @)@;Ü\label{lst:wirgcfeatures9}Ü
+
+// Determine whether stack coalescing of spills is activated.
+@bool@ WIR_GraphColoring::getCoalesceStackLocations@( void )@;Ü\label{lst:wirgcfeatures10}Ü
+
+// Set whether coalescing according to Briggs shall be activated.
+@void@ WIR_GraphColoring::setCoalescingBriggs@( bool@ c æ=æ true @)@;Ü\label{lst:wirgcfeatures11}Ü
+
+// Determine whether coalescing according to Briggs is activated.
+@bool@ WIR_GraphColoring::getCoalescingBriggs@( void )@;Ü\label{lst:wirgcfeatures12}Ü
+
+// Set whether coalescing according to George shall be activated.
+@void@ WIR_GraphColoring::setCoalescingGeorge@( bool@ c æ=æ true @)@;Ü\label{lst:wirgcfeatures13}Ü
+
+// Determine whether coalescing according to George is activated.
+@bool@ WIR_GraphColoring::getCoalescingGeorge@( void )@;Ü\label{lst:wirgcfeatures14}Ü
+
+// Determine whether any kind of coalescing is activated.
+@bool@ WIR_GraphColoring::getCoalescing@( void )@;Ü\label{lst:wirgcfeatures15}Ü
+
+// Set whether rematerialization shall be activated.
+@void@ WIR_GraphColoring::setRematerialization@( bool@ r æ=æ true @)@;Ü\label{lst:wirgcfeatures16}Ü
+
+// Determine whether rematerialization is activated.
+@bool@ WIR_GraphColoring::getRematerialization@( void )@;Ü\label{lst:wirgcfeatures17}Ü
+\end{lstlisting}
+
+Method \texttt{setBestOfThreeSpilling} (\cref{lst:wirgcfeatures3}) controls whether Bernstein's best-of-three spilling heuristic is applied.
+It computes spill costs and takes spilling decisions using three different heuristics and finally keeps the decisions of the best heuristic leading to overall minimum spill costs for a \gls{WIR} function.
+By default, this best-of-three approach is not activated due to its compile-time overheads.
+Instead, Chaitin's simple spill heuristic is activated during construction.
+
+The full spilling of all virtual registers onto the system's stack without any kind of intelligent register allocation can be achieved via method \texttt{setSpillAll} (\cref{lst:wirgcfeatures5}).
+The code resulting from this somehow resembles the output of \gls{GCC} when no register allocation is performed at its optimization level \texttt{-O0}.
+Obviously, this ``feature'' regularly is turned off by the constructor of class \texttt{WIR\_GraphColoring}.
+In order to conveniently recognize spill loads or stores, they can be marked using dedicated \gls{WIR} comments (see \cref{lst:commentconstruction} on \cpageref{lst:commentconstruction}).
+This behavior of the register allocator can be controlled using method \texttt{setMarkSpillCode} (\cref{lst:wirgcfeatures7}), it is deactivated by default.
+
+The behavior of stack coalescing (default: activated) can be adjusted using \texttt{setCoalesceStackLocations} (\cref{lst:wirgcfeatures9}).
+
+The different flavors of coalescing of register-register moves can be turned on or off independently via methods \texttt{setCoalescingBriggs} (\cref{lst:wirgcfeatures11}) and \texttt{setCoalescingGeorge} (\cref{lst:wirgcfeatures13}), resp.
+By default, the class' constructors activate both Briggs' and George's coalescing.
+Method \texttt{getCoalescing} (\cref{lst:wirgcfeatures15}) returns whether any of Briggs' or George's coalescing is turned on.
+
+Finally, a very simple approach for rematerialization can be activated with the help of method \texttt{setRemateriali\-zation} (\cref{lst:wirgcfeatures16}).
+Rematerialization reconstructs or rematerializes a value if this is less expensive than spill-storing and -loading it.
+Within the \gls{WIR} register allocator, the bit-true data flow analysis from \cref{sec:bitdflow} is used to identify spill candidates that contain only constant values.
+For such virtual registers, re-computing these constants usually is cheap so that no spill code is produced, but rematerialization code instead that simply loads the analyzed constant value.
+Due to the complexity of the bit-true data flow analysis, rematerialization is in general turned off by default.
+
+Class \texttt{RV\_GraphColoring} (see file \texttt{WIR/arch/riscv/optimizations/gcregallocation/rvgraphcolor\-ing.h}) provides the derivation of the \gls{WIR} register allocator for the RISC-V RV32IMFC \gls{ISA}.
+Its constructors are identical to those of the base class shown in \cref{lst:wirgcconstr}.
+The register allocator currently supports the 32 general-purpose integer registers \texttt{x0} -- \texttt{x31} and the 32 bits wide floating-point registers \texttt{f0} -- \texttt{f31}.
+The use of the floating-point registers can be enabled with method \texttt{setRV32IF} (cf. \cref{lst:rvgcconstr4} of \cref{lst:rvgcconstr}).
+
+\begin{wirFutureWork}
+Register allocation for the RISC-V floating-point registers \texttt{f0} -- \texttt{f31} is currently partially supported.
+Adding support for the 64 bits wide floating-point registers defined by the RV32IFD \gls{ISA} extension to the register allocator is part of our future work.
+\end{wirFutureWork}
+
+\begin{lstlisting}[style=code,float=!t,caption={Public Interface of RISC-V Register Allocator from Class \texttt{RV\_GraphColoring}},label=lst:rvgcconstr]
+// Default constructor for system-level optimization.
+explicit RV_GraphColoring::RV_GraphColoring@(@ WIR_System æ&æs, @bool@ v æ=æ false @)@;Ü\label{lst:rvgcconstr1}Ü
+
+// Default constructor for compilation unit-level optimization.
+explicit RV_GraphColoring::RV_GraphColoring@(@ WIR_CompilationUnit æ&æc, @bool@ v æ=æ false @)@;Ü\label{lst:rvgcconstr2}Ü
+
+// Default constructor for function-level optimization.
+explicit RV_GraphColoring::RV_GraphColoring@(@ WIR_Function æ&æf, @bool@ v æ=æ false @)@;Ü\label{lst:rvgcconstr3}Ü
+
+// Set whether 32 bits wide floating-point registers from RV32IF shall be used.
+@void@ RV_GraphColoring::setRV32IF@( bool@ Ü\texttt{if}Ü æ=æ true @)@;Ü\label{lst:rvgcconstr4}Ü
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!b,caption={Public Interface of TriCore Register Allocator from Class \texttt{TC\_GraphColoring}},label=lst:tcgcconstr]
+// Default constructor for system-level optimization.
+explicit TC_GraphColoring::TC_GraphColoring@(@ WIR_System æ&æs, @bool@ v æ=æ false, @bool@ u æ=æ false @)@;Ü\label{lst:tcgcconstr1}Ü
+
+// Default constructor for compilation unit-level optimization.
+explicit TC_GraphColoring::TC_GraphColoring@(@ WIR_CompilationUnit æ&æc, @bool@ v æ=æ false, @bool@ u æ=æ false @)@;Ü\label{lst:tcgcconstr2}Ü
+
+// Default constructor for function-level optimization.
+explicit TC_GraphColoring::TC_GraphColoring@(@ WIR_Function æ&æf, @bool@ v æ=æ false, @bool@ u æ=æ false @)@;Ü\label{lst:tcgcconstr3}Ü
+
+// Set whether only physical registers from the TriCore's upper context will be used.
+@void@ TC_GraphColoring::setUseOnlyUC@( bool@ u æ=æ true @)@;Ü\label{lst:tcgcconstr4}Ü
+
+// Determine whether only physical registers from the TriCore's upper context will be used.
+@bool@ TC_GraphColoring::getUseOnlyUC@( void )@;Ü\label{lst:tcgcconstr5}Ü
+\end{lstlisting}
+
+The port of the \gls{WIR} register allocator to the Infineon TriCore architecture also inherits from class \texttt{WIR\_Graph\-Coloring} and can be found in class \texttt{TC\_GraphColoring} from file \texttt{WIR/arch/tricore/optimizations/gc\-regallocation/tcgraphcoloring.h}.
+Its public interface is summarized in \cref{lst:tcgcconstr}.
+The constructors are very similar to those from \cref{lst:wirgcconstr}, except an additional optional Boolean argument \texttt{u} that defaults to \texttt{false}.
+This argument controls whether the TriCore allocator will use only physical registers from its so-called upper context.
+The TriCore's upper context is automatically saved by the processor's hardware during function calls so that their use is highly efficient.
+By default, however, the register allocator uses lower context registers if the register pressure is high.
+Then, however, the saving and restoration of these lower context-registers during function calls requires extra code to be generated by the register allocator.
+
+Besides the constructors' argument \texttt{u}, this behavior can also be specified using method \texttt{setUseOnlyUC} (\cref{lst:tcgcconstr4}).
+The Boolean argument of this method defaults to \texttt{true} which means that the register allocator will only use upper context registers.
+The current configuration of the allocator regarding the upper context can be retrieved with method \texttt{getUseOnlyUC} (\cref{lst:tcgcconstr5}).
+
+
+%-------------------------------------------------------------------------
+\section{Dead Code Elimination}
+\label{sec:optdce}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_DeadCode}, & Systems -- Functions & RV32IMC, \\
+  \texttt{RV\_DeadCode}, \texttt{TC\_DeadCode} & & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+Dead code denotes \gls{WIR} operations that compute only values that are not used on any executable path leading from the operation~\cite[chapter~18.10]{Much97}.
+When relating this to the bit-true \gls{DFG} from \cref{def:bitdfg}, dead operations are primarily characterized by nodes that have no outgoing edge.
+Of course, certain classes of machine operations that, by construction, have no outgoing \gls{DFG} edges -- e.g., function calls or returns, memory stores or other operations with side effects -- are not considered dead.
+
+However, this text book definition of dead code can be extended by exploiting that the bit-true data flow analysis from \cref{sec:bitdflow} is able to reason about potential values of registers.
+If the analysis reveals that all bits along some \gls{DFG} edge provably do not care, i.e., all bits of the edge's up value are \texttt{bX}, then this means that a value flows along this edge whose individual bits are not used on the edge's executable path.
+Such dead \gls{DFG} edges can naturally be eliminated, and if all outgoing edges of an operation get eliminated this way, the operation itself becomes dead.
+The entire process of marking edges and operations as dead, which in turn leads to other edges being dead etc. is iteratively applied until no more dead edges and operations were identified.
+All dead operations are finally removed from \gls{WIR}.
+
+This behavior is relized by the \gls{WIR} dead code elimination.
+Its base implementation is given by class \texttt{WIR\_Dead\-Code} from file \texttt{WIR/optimizations/deadcode/wirdeadcode.h}, which in turn inherits from class \texttt{WIR\_BitOpt} from \cref{lst:wirbitopt}.
+\gls{ISA}-specific variants plug the appropriate bit-true data flow analysis into this generic dead code elimination so that the final, processor-specific optimizations for RISC-V RV32IMC and Infineon TriCore are provided by classes \texttt{RV\_DeadCode} and \texttt{TC\_DeadCode}, resp. (see files \texttt{WIR/arch/riscv/optimizations/dead\-code/rvdeadcode.h} and \texttt{WIR/arch/tricore/optimizations/deadcode/tcdeadcode.h}).
+The interfaces of all these optimization classes offer no particular features beyond \cref{lst:wirbitopt} so that no listings are provided here again.
+
+
+%-------------------------------------------------------------------------
+\section{Constant Folding}
+\label{sec:optcfold}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_ConstFold}, & Systems -- Functions & RV32IMC, \\
+  \texttt{RV\_ConstFold}, \texttt{TC\_ConstFold} & & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+According to~\cite[chapter~12.1]{Much97}, constant folding refers to the evaluation at compile time of operations whose operands are known to be constant.
+Translating this to \gls{WIR} and its bit-true data flow analysis, constant folding then replaces operations that provably only produce known constant values as output by new operations that explicitly generate these pre-computed constants.
+
+\begin{wirExample}\label{ex:cfold}
+Consider the following code snippet based on the RISC-V RV32 processor model introduced in \cref{ssec:rv32model} as example:
+\begin{lstlisting}[style=code]
+        addi            x_3, x0, §20§                Ü\itshape\color{gray}\# x\_3 := 20\label{lst:rv32cfold1}Ü
+        addi            x_4, x0, §42§                Ü\itshape\color{gray}\# x\_4 := 42\label{lst:rv32cfold2}Ü
+        mul             x_5, x_3, x_4              Ü\itshape\color{gray}\# x\_5 := x\_3 * x\_4\label{lst:rv32cfold3}Ü
+
+        add             x_6, sp, x_5               Ü\itshape\color{gray}\# x\_6 := stack pointer + x\_5\label{lst:rv32cfold4}Ü
+        lw              x_7, §0§(x_6)                Ü\itshape\color{gray}\# x\_7 := memory[ x\_6 ]\label{lst:rv32cfold5}Ü
+\end{lstlisting}
+It shows typical, unoptimized code for address computations:
+\cref{lst:rv32cfold1} loads the number of an array element into virtual register \texttt{x\_3}.
+The size of a single array element is loaded into \texttt{x\_4} in \cref{lst:rv32cfold2}.
+The multiplication of both values (\cref{lst:rv32cfold3}) results in \texttt{x\_5} holding the byte offset of the relevant array element, relative from the array's base.
+Adding the stack pointer (\cref{lst:rv32cfold4}) provides the stack pointer-relative address in \texttt{x\_6}, which is then finally used by the \texttt{lw} operation from \cref{lst:rv32cfold5}.
+
+The bit-true data flow analysis from \cref{sec:bitdflow} determines that register \texttt{x\_5} defined by the multiplication always contains the constant value 840.
+Constant folding exploits this information as follows:
+\begin{lstlisting}[style=code,firstnumber=4]
+        addi            x_5, x0, §840§               Ü\itshape\color{gray}\# x\_5 := 840\label{lst:rv32cfold6}Ü
+        add             x_6, sp, x_5               Ü\itshape\color{gray}\# x\_6 := stack pointer + x\_5\label{lst:rv32cfold7}Ü
+        lw              x_7, §0§(x_6)                Ü\itshape\color{gray}\# x\_7 := memory[ x\_6 ]\label{lst:rv32cfold8}Ü
+\end{lstlisting}
+\end{wirExample}
+
+This optimization exists within \gls{WIR} for the RISC-V RV32IMC architecture (class \texttt{RV\_ConstFold} from file \texttt{WIR/ arch/riscv/optimizations/constfold/rvconstfold.h}) and the TriCore TC1.3 and TC1.3.1 \glspl{ISA} (class \texttt{TC\_ConstFold}, file \texttt{WIR/arch/tricore/optimizations/constfold/tcconstfold.h}).
+In general, it puts one (or maybe two) new operation immediately after each original operation that provably only produces constants along all outgoing \gls{DFG} edges.
+This new operation (the \texttt{addi} from \cref{lst:rv32cfold6} in the above example) defines the very same register as \texttt{mul} from \cref{lst:rv32cfold3} does, and it is placed directly after it within the \gls{WIR} code, without actively erasing the operations from \crefrange{lst:rv32cfold1}{lst:rv32cfold3}.
+This deletion of the original operations that only produce constants as result is left to a subsequent dead code elimination (cf. \cref{sec:optdce}).
+Constant folding within \gls{WIR} is realized such that it never attempts to fold operations that it has created itself.
+I.e., a second folding pass will not fold the previously created \texttt{addi} from \cref{lst:rv32cfold6} above again.
+
+As the constant folding of \gls{WIR} is a bit-level optimization, it also exploits that bits produced by some constant operation can be \texttt{bX}, i.e., they do not care.
+If the corresponding up value in the \gls{DFG} is positive, such useless bits are interpreted as \texttt{b0}, or as \texttt{b1} for negative values.
+This way, the absolute value of the constant subject to folding is minimized, which increases the likelihood that only one machine operation is required for folding, instead of two.
+
+In addition, this optimization furthermore features:
+\begin{description}
+  \item[Branch folding:] Whenever the condition of a conditional branch operation is known to be always true or false, the conditional branch gets substituted by an unconditional branch or gets eliminated completely.
+  \item[Move folding:] Operations that provably have no arithmetical effect but instead copy one register into another one (e.g., \texttt{xori x\_8, x\_7, 0} for RV32I) are replaced by a dedicated register-register move operation, allowing to coalesce it during a subsequent register allocation (cf. \cref{sec:optregalloc}).
+\end{description}
+
+Similar to all optimizations previously presented in this chapter, the interfaces of the constant folding classes do not provide any specific features so that their discussion is omitted here.
+
+
+%-------------------------------------------------------------------------
+\section{Constant Propagation}
+\label{sec:optcprop}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_ConstProp}, & Systems -- Functions & RV32IMC \\
+  \texttt{RV\_ConstProp}, \texttt{TC\_ConstProp} & & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+Constant propagation is a transformation that, given an assignment '\texttt{x := c}' for a variable \texttt{x} and a constant \texttt{c}, replaces later uses of \texttt{x} with uses of \texttt{c} as long as intervening assignments have not changed the value of \texttt{x}~\cite[chapter~12.6]{Much97}.
+In the context of \gls{WIR}, this optimization pass actually replaces register parameters of operations by immediate parameters, in order to make constant operands explicit as much as possible.
+
+\begin{wirExample}
+For the RISC-V constant folding example from \cref{sec:optcfold}
+\begin{lstlisting}[style=code,firstnumber=4]
+        addi            x_5, x0, §840§               Ü\itshape\color{gray}\# x\_5 := 840\label{lst:rv32cprop1}Ü
+        add             x_6, sp, x_5               Ü\itshape\color{gray}\# x\_6 := stack pointer + x\_5\label{lst:rv32cprop2}Ü
+
+        lw              x_7, §0§(x_6)                Ü\itshape\color{gray}\# x\_7 := memory[ x\_6 ]\label{lst:rv32cprop3}Ü
+\end{lstlisting}
+propagation of the constant 840 into the use of register \texttt{x\_5} of \cref{lst:rv32cprop2} has the effect that another operation is inserted after \cref{lst:rv32cprop2} that has a format supporting an immediate parameter, such as:
+\begin{lstlisting}[style=code,firstnumber=6]
+        addi            x_6, sp, §840§               Ü\itshape\color{gray}\# x\_6 := stack pointer + 840\label{lst:rv32cprop4}Ü
+        lw              x_7, §0§(x_6)                Ü\itshape\color{gray}\# x\_7 := memory[ x\_6 ]\label{lst:rv32cprop5}Ü
+\end{lstlisting}
+\end{wirExample}
+
+Again, constant propagation only adds new operations and leaves the removal of original, obsolete operations (e.g., the \texttt{addi} and \texttt{add} operations from \cref{lst:rv32cprop1,lst:rv32cprop2} above) to a subsequent dead code elimination.
+And propagation supports constants consisting of \texttt{b0}, \texttt{b1} and \texttt{bX} bits out of the \texttt{L4} partial order described in \cref{sec:bitdflow}.
+
+Within \gls{WIR}, constant propagation is realized by the abstract base class \texttt{WIR\_ConstProp} from file \texttt{WIR/optimi\-zations/constprop/wirconstprop.h}.
+Its port to the RISC-V architecture resides in class \texttt{RV\_ConstProp} from file \texttt{WIR/arch/riscv/optimizations/constprop/rvconstprop.h}.
+The derivation for the TriCore architecture is provided by class \texttt{TC\_ConstProp} (file \texttt{WIR/arch/tricore/optimizations/constprop/tcconst\-prop.h}).
+The \glspl{API} of the constant propagation classes are identical to that shown in \cref{lst:wirbitopt}.
+
+
+%-------------------------------------------------------------------------
+\section{Redundant Code Elimination}
+\label{sec:optredundantcode}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_RedundantCode}, & Systems -- Functions & RV32IMC \\
+  \texttt{RV\_RedundantCode}, \texttt{TC\_RedundantCode} & & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+According to~\cite[chapter~13.1]{Much97}, an expression in a program is a common subexpression if there is another occurrence of the expression whose evaluation always precedes this one in execution order and if the operands of the expression remain unchanged between the two evaluations.
+In the context of \gls{WIR}, this notion is generalized and subsequently called redundant code.
+The key property of common subexpressions is that they always produce the very same results, and this is exploited using the bit-true data flow analysis of \gls{WIR} (cf. \cref{sec:bitdflow}).
+Redundant code thus is characterized by pairs of \gls{WIR} operations \texttt{o1} and \texttt{o2} such that
+\begin{itemize}
+  \item \texttt{o1} defines a register parameter \texttt{p1} and \texttt{o2} uses a register parameter \texttt{p2} where the bit-true data flow along all outgoing edges of \texttt{p1} is equivalent to that of all incoming edges of \texttt{p2}, and
+  \item the definition of \texttt{p1} always reaches the use in \texttt{p2}, i.e., \texttt{o1} dominates \texttt{o2}, and
+  \item the registers defined and used by \texttt{p1} and \texttt{p2} are different, but are of the same type.
+\end{itemize}
+Redundant operations are then optimized such that the register used by parameter \texttt{p2} is replaced by the register defined in \texttt{p1}.
+This way, a direct data flow from \texttt{p1} to \texttt{p2} is achieved, probably turning the initially incoming edges of \texttt{p2} dead.
+
+The generic part of this optimization is provided by class \texttt{WIR\_RedundantCode} from file \texttt{WIR/optimizations/ redundantcode/wirredundantcode.h}.
+Its port to the RISC-V architecture can be found in class \texttt{RV\_Re\-dun\-dant\-Code} (file \texttt{WIR/arch/riscv/optimizations/redundantcode/rvredundantcode.h}), the Tri\-Core class is \texttt{TC\_Re\-dundantCode} (file \texttt{WIR/arch/tricore/optimizations/redundantcode/tcredundantcode.h}).
+All these classes do not come with any special \gls{API} features worthwhile mentioning here.
+
+
+%-------------------------------------------------------------------------
+\section{Jump Correction}
+\label{sec:optjumps}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_JumpCorrection}, & Systems & TC1.3, TC1.3.1 \\
+  \texttt{TC\_JumpCorrection} & &  \\
+  \hline
+\end{tabular}
+
+As discussed earlier in \cref{chap:sysmodel}, \gls{WIR} is an \gls{IR} that is explicitly designed to model memory layouts of computer systems and to perform memory allocation of, e.g., functions or basic blocks.
+However, jump and function call operations of real-life processor \glspl{ISA} are regularly limited in the distance that they can bridge.
+According to the vendor-specific format of some jump operation, a maximum distance of, e.g., $\pm2^{15}$ bytes between the jump and its target might be allowed.
+If the jump and its target are accidentially allocated to memory regions that are far away from each other in a processor's address space, the jump distance might become too large so that the jump operation in its given format is invalid.
+
+Such situations are detected and corrected by the jump correction pass.
+By exploiting the \gls{WIR} memory layout (cf. \cref{sec:memlayout}), it computes the addresses of a jump and its target and determines whether it is valid or not.
+The latter case is corrected by, e.g., replacing a short jump by a long jump, by inserting indirect jumps, or by creating trampolines etc.
+The correction of one jump can have the effect that the addresses of following basic blocks change, potentially turning other jumps or calls invalid.
+Thus, jump correction in general is an iterative pass that keeps on working until all jumps and calls are valid in the end.
+
+Obviously, this pass is heavily \gls{ISA}-specific so that its abstract base class \texttt{WIR\_JumpCorrection} from file \texttt{WIR/op\-timizations/jumpcorrection/wirjumpcorrection.h} provides very generic functionality only.
+The main sophistication lies in the processor-specific classes that inherit from this base class.
+Currently, jump correction is realized for the Infineon TriCore \glspl{ISA}, see class \texttt{TC\_JumpCorrection} (file \texttt{WIR/arch/tricore/optimizations/ jumpcorrection/tcjumpcorrection.h}).
+
+\cref{lst:wiroptjumps} shows the public interface of class \texttt{WIR\_JumpCorrection}.
+As can be seen, there is only one constructor (cf. \cref{lst:wiroptjumps1}) that expects a reference to a full \gls{WIR} system as argument.
+More fine-grained optimization, e.g., at the level of single functions, is not supported as the memory layout properties introduced in \cref{sec:memlayout} require the presence of a complete system.
+If just a single correction pass over all jumps present in a system shall be performed instead of iterating until all jumps are valid, this behavior can be specified using \texttt{setSinglePass} (\cref{lst:wiroptjumps2}).
+The method's Boolean argument defaults to \texttt{true} so that only a single pass is carried out.
+This jump correction property can be queried with method \texttt{getSinglePass} (\cref{lst:wiroptjumps3}).
+
+The jump costs methods \texttt{getJumpCostsSize} and \texttt{getJumpCostsCycles} from \cref{lst:wiroptjumps4,lst:wiroptjumps5} are purely virtual as they are inherently processor-specific.
+Their intention is to provide the estimated number of bytes and clock cycles, resp., that will be added due to the correction of a jump from a given source to a target basic block.
+The Boolean argument of both methods specifies whether the additional costs relating to either the source (\texttt{true}) or to the target (\texttt{false}) basic block shall be provided.
+These methods are not required for the actual task of jump correction per se.
+Instead, they can be used, e.g., by advanced memory allocation optimizations so that they can properly consider potential overheads if they decide to allocate two basic blocks to different memories, making a jump correction necessary.
+
+\begin{lstlisting}[style=code,float=t,caption={Public Interface of Class \texttt{WIR\_JumpCorrection}},label=lst:wiroptjumps]
+// Default constructor for system-level optimization.
+explicit WIR_JumpCorrection::WIR_JumpCorrection@(@ WIR_System æ&æs @)@;Ü\label{lst:wiroptjumps1}Ü
+
+// Set whether jump correction is applied just once or if it repeats until a fixed point is reached.
+void WIR_JumpCorrection::setSinglePass@( bool@ p æ=æ true @)@;Ü\label{lst:wiroptjumps2}Ü
+
+// Determine whether jump correction is applied just once or if it repeats until a fixed point is reached.
+@bool@ WIR_JumpCorrection::getSinglePass@( void )@ const;Ü\label{lst:wiroptjumps3}Ü
+
+// Get the number of bytes introduced to a basic block due to correction of a jump from s to t.
+virtual @int@ WIR_JumpCorrection::getJumpCostsSize@(@ const WIR_BasicBlock æ&æs, const WIR_BasicBlock æ&æt,                                                         @bool@ src @) =@ §0§;Ü\label{lst:wiroptjumps4}Ü
+
+// Get the number of clock cycles introduced to a basic block due to correction of a jump from s to t.
+virtual @int@ WIR_JumpCorrection::getJumpCostsCycles@(@ const WIR_BasicBlock æ&æs, const WIR_BasicBlock æ&æt,                                                         @bool@ src @) =@ §0§;Ü\label{lst:wiroptjumps5}Ü
+\end{lstlisting}
+
+The TriCore-specific variant of jump correction does not extend this \gls{API} from \cref{lst:wiroptjumps} so that we omit its presentation for the sake of brevity.
+
+
+%-------------------------------------------------------------------------
+\section{Operation Bit Width Reduction}
+\label{sec:optopwidth}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{RV\_OperationBitWidths}, & Systems -- Functions & RV32IMC \\
+  \texttt{TC\_OperationBitWidths} & & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+Many processor architectures feature a mixed-width \gls{ISA} where operations having different bit widths can freely be used.
+The operation bit width reduction of \gls{WIR} is a pass that consequently replaces operations of large bit widths by more compact operations in order to reduce code size.
+In many processor \glspl{ISA}, this width reduction is achieved by saving one explicit parameter denoting an operation's argument and target register.
+In other words, such compact operations regularly use the very same register parameter both as input and as output, i.e., the register gets overwritten by a compact operation.
+
+\begin{wirExample}\label{ex:opwidth1}
+Consider the following 16 bits wide \texttt{add} operation of the TriCore \gls{ISA} as example:
+\begin{lstlisting}[style=code]
+        add             d_3, d_4                   Ü\itshape\color{gray}\# d\_3 := d\_3 + d\_4, 16 bits wide\label{lst:tcopwidth1}Ü
+\end{lstlisting}
+As can be seen, it only requires two registers as parameters, turning it into a compact 16-bits operation.
+The first register parameter \texttt{x\_3} is both used and defined afterwards.
+
+If some \gls{WIR} code contains a 32 bits wide addition that also overwrites its first input register like, e.g.: \\
+\\
+\begin{lstlisting}[style=code,firstnumber=2]
+        add             d_3, d_3, d_4              Ü\itshape\color{gray}\# d\_3 := d\_3 + d\_4, 32 bits wide\label{lst:tcopwidth2}Ü
+\end{lstlisting}
+then this operation's bit width can naturally be reduced by exploiting the 16-bits variant of \texttt{add}.
+If furthermore the 32-bits operation performs a commutative computation, as a classical addition does, then
+\begin{lstlisting}[style=code,firstnumber=3]
+        add             d_3, d_4, d_3              Ü\itshape\color{gray}\# d\_3 := d\_4 + d\_3, 32 bits wide\label{lst:tcopwidth3}Ü
+\end{lstlisting}
+can also be reduced to the \texttt{add} from \cref{lst:tcopwidth1}.
+\end{wirExample}
+
+Class \texttt{RV\_OperationBitWidths} (cf. file \texttt{WIR/arch/riscv/optimizations/operationbitwidths/rvoper\-ationbitwidths.h}) performs this kind of bit width reductions for the RISC-V RV32IMC architecture by systematically matching all 32 bits wide operations with scenarios allowing to use compact 16 bits wide operations instead.
+The TriCore port of this optimization is realized by class \texttt{TC\_OperationBitWidths} from file \texttt{WIR/arch/tricore/optimizations/operationbitwidths/tc\-operationbitwidths.h}.
+This class has no specific additional features so that its public interface is identical with \cref{lst:wiropt}.
+
+
+%-------------------------------------------------------------------------
+\section{Predicated Execution}
+\label{sec:optpredex}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{TC\_PredicatedExecution} & Systems -- Functions & TC1.3, TC1.3.1 \\
+  \hline
+\end{tabular}
+
+Predicated execution is a concept supported by many \glspl{ISA} in order to avoid branching, especially for architectures with deep pipelines.
+In classical, unoptimized code, if-then regions (see \cref{fig:acyclic} on \cpageref{fig:acyclic}) are realized using a conditional branch that evaluates some condition.
+Operations inside the branch node are either executed or skipped via the conditional branch.
+
+When using predicated execution (also known as conditional execution), the conditional branch is removed so that the operations within the branch node are always executed.
+However, these operations are extended by a condition parameter that holds the result of the evaluated condition of the if-then region.
+Depending on these condition parameters, the always-executed, predicated operations either keep their computed results, or silently discard them as if they had never been executed.
+
+Within \gls{WIR}, predicated execution is supported for the TriCore architectures. This pass is realized by class \texttt{TC\_PredicatedExecution} (file \texttt{WIR/arch/tricore/optimizations/predicatedexecution/tcpredica\-tedexecution.h}).
+Its implementation closely follows the suggestions from~\cite[sections~1.2.8 and 1.2.9]{tricore03a}.
+According to that, predicated execution can be applied to an if-then region if
+\begin{itemize}
+  \item a condition basic block ends with a conditional branch, and
+  \item the branch node consists of a single basic block only, and
+  \item all operations inside this one basic block are suitable for predicated execution, i.e., can be transformed into the TriCore \texttt{cmov}, \texttt{cmovn}, \texttt{sel}, \texttt{seln}, \texttt{cadd}, \texttt{caddn}, \texttt{csub} or \texttt{csubn} operations.
+\end{itemize}
+
+
+%-------------------------------------------------------------------------
+\section{Peephole Optimization}
+\label{sec:optpeep}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_Peephole}, \texttt{WIR\_SiliconBugs}, & Systems -- Functions & TC1.3, TC1.3.1 \\
+  \texttt{TC\_Peep\_EXTRST} -- \texttt{TC\_Peep\_PreIncr}, & &  \\
+  \texttt{TC1796\_CPU\_TC\_013} -- \texttt{TC179x\_CPU\_TC\_105} & &  \\
+  \hline
+\end{tabular}
+
+Peephole optimization is a very simple approach where a sliding window of fixed size is moved over the code of \gls{WIR} functions.
+Within the currently observed peephole, some specific code pattern is searched and if this pattern matches, a simple local transformation of the peephole's code is done.
+This general behavior to move a sliding window and to match some code pattern is realized by the abstract base class \texttt{WIR\_Peephole} from file \texttt{WIR/optimizations/peephole/wirpeephole.h}.
+The generic interface of this base class is presented in \cref{lst:wiroptpeep}.
+
+\begin{lstlisting}[style=code,float=!b,caption={Public Interface of Class \texttt{WIR\_Peephole}},label=lst:wiroptpeep]
+// Default constructor for system-level optimization.
+explicit WIR_Peephole::WIR_Peephole@(@ WIR_System æ&æs @)@;Ü\label{lst:wiroptpeep1}Ü
+
+// Default constructor for compilation unit-level optimization.
+explicit WIR_Peephole::WIR_Peephole@(@ WIR_CompilationUnit æ&æc @)@;Ü\label{lst:wiroptpeep2}Ü
+
+// Default constructor for function-level optimization.
+explicit WIR_Peephole::WIR_Peephole@(@ WIR_Function æ&æf @)@;Ü\label{lst:wiroptpeep3}Ü
+
+// Add another peephole size to be considered during optimization.
+void WIR_Peephole::addPeepholeSize@( unsigned int@ s @)@;Ü\label{lst:wiroptpeep4}Ü
+
+// Get the set of all peephole sizes to be considered during optimization.
+const ästd::setäæ<æ@unsigned int@æ> &æWIR_Peephole::getPeepholeSizes@( void )@ const;Ü\label{lst:wiroptpeep5}Ü
+
+// Set whether peepholes may cross basic block boundaries or not.
+void WIR_Peephole::setCrossBasicBlocks@( bool@ c æ=æ true @)@;Ü\label{lst:wiroptpeep6}Ü
+
+// Determine whether peepholes may cross basic block boundaries or not.
+@bool@ WIR_Peephole::getCrossBasicBlocks@( void )@ const;Ü\label{lst:wiroptpeep7}Ü
+\end{lstlisting}
+
+Besides the standard constructors from \crefrange{lst:wiroptpeep1}{lst:wiroptpeep3}, methods \texttt{addPeepholeSize} and \texttt{getPeepholeSizes} (\cref{lst:wiroptpeep4,lst:wiroptpeep5}) are provided for the handling of several peephole sizes.
+Peephole sizes represent the numbers of consecutive \gls{WIR} instructions that form a peephole.
+By supporting several peephole sizes, various code patterns can be matched in one pass in a very efficient manner.
+The set of all specified peephole sizes can be retrieved using \texttt{getPeepholeSizes}.
+Another characteristic property of peepholes is whether they may span over several \gls{WIR} basic blocks or not.
+This behavior can be controlled using method \texttt{setCrossBasicBlocks} (\cref{lst:wiroptpeep6}).
+By default, peepholes are not allowed to cross basic block boundaries so that all instructions of a peephole belong to the very same basic block.
+Method \texttt{getCrossBasicBlocks} (\cref{lst:wiroptpeep7}) can be used to query the status of this property.
+
+The peephole optimizer then starts creating peepholes for a given \gls{WIR} function beginning with its very first instruction.
+From this starting point on, the next $n$ instructions form a peephole if they exist in the current function and if $n$ is a previously specified peephole size.
+Depending on \texttt{setCrossBasicBlocks}, the inspection of the next $n$ instructions moves over and covers all successor blocks if the last instruction of the current basic block is reached.
+This way, all possible peepholes for one instruction acting as starting point are formed, code patterns are matched and transformations applied.
+After the current starting instruction has been processed, its successor instruction is considered as next starting point, etc.
+
+For the Infineon TriCore architecture, a total of 4 peephole optimizers exist within \gls{WIR} (cf. directory \texttt{WIR/arch/ tricore/optimizations/peephole}).
+Their behavior is exemplified in \cref{tab:tcpeep}.
+In TriCore code, the \texttt{EXTR} operation regularly serves for casting the contents of some register \texttt{dB} to 8 bits of a byte or 16 bits of a half-word.
+Such casts are redundant before memory stores or after memory loads of bytes or half-words, resp., because these loads and stores of bytes and half-words only transmit 8 or 16 bits to/from memory by construction.
+Thus, the TriCore peephole optimizers \texttt{TC\_Peep\_EXTRST} and \texttt{TC\_Peep\_LDEXTR} detect such situations, remove the \texttt{EXTR} operation and patch the load/store such that the originally casted register \texttt{dB} is stored or loaded as byte or half-word.
+
+A very simple form of redundant load/store elimination is realized by class \texttt{TC\_Peep\_LDST}.
+It searches for two directly following load and store operations of the same bit width that load and store using the very same address register \texttt{aB}.
+If, furthermore, the very same data register \texttt{dA} that gets loaded is directly written back to the very same address, then the store operation is redundant and is removed.
+
+Finally, the peephole optimizer \texttt{TC\_Peep\_PreIncr} exploits the pre-increment addressing mode of the TriCore architecture.
+It looks for address register increments by a constant using, e.g., an \texttt{ADD.A} operation, followed by a subsequent memory load or store that uses this incremented address register as base address with constant offset 0.
+Then, the same effect can be achieved by eliminating the \texttt{ADD.A} operation and modifying the memory access such that it uses pre-increment addressing by the original constant increment.
+
+\begin{table}[t]
+  \begin{center}
+    \caption{Examples of TriCore Peephole Transformations}
+    \label{tab:tcpeep}
+    \begin{tabular}{|l|l|l|}
+      \hline
+      \textbf{Peephole Optimizer} & \textbf{Original Code Pattern} & \textbf{Transformed Code Pattern} \\
+      \hhline{|=|=|=|}
+      \texttt{TC\_Peep\_EXTRST}  & \texttt{EXTR\ \ \ \ dA, dB, 0, 8} & \texttt{ST.B\ \ \ \ [aX], dB} \\
+                                 & \texttt{ST.B\ \ \ \ [aX], dA} & \\
+      \hline
+      \texttt{TC\_Peep\_LDEXTR}  & \texttt{LD.B\ \ \ \ dA, [aX]} & \texttt{LD.B\ \ \ \ dB, [aX]} \\
+                                 & \texttt{EXTR\ \ \ \ dB, dA, 0, 8} & \\
+      \hline
+      \texttt{TC\_Peep\_LDST}    & \texttt{LD.B\ \ \ \ dA, [aB]} & \texttt{LD.B\ \ \ \ dA, [aB]} \\
+                                 & \texttt{ST.B\ \ \ \ [aB], dA} & \\
+      \hline
+      \texttt{TC\_Peep\_PreIncr} & \texttt{ADD.A\ \ \ aA, 6} & \texttt{ST.B\ \ \ \ [+aA]6, dX} \\
+                                 & \texttt{ST.B\ \ \ \ [aA]0, dX} & \\
+      \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+A very special variant of peephole optimization is provided by the silicon bug optimizer of \gls{WIR}.
+It is generically realized by class \texttt{WIR\_SiliconBugs} (see file \texttt{WIR/optimizations/siliconbugs/wirsiliconbugs.h}) that is derived from \texttt{WIR\_Peephole}.
+The motivation of this is that occasionally, real hardware implementations of some architecture behave slightly different than initially specified in the \gls{ISA}.
+Such behavioral deviations are documented by the hardware manufacturer, and possible workarounds are given by providing code sequences that do not trigger such silicon bugs.
+The silicon bugs optimizer searches for code snippets that might trigger such a bug and replaces them by the suggested workaround.
+
+The general optimization approach (detecting a given code pattern in some peephole, and locally transforming the peephole's contents) is identical to that of class \texttt{WIR\_Peephole}.
+The constructor of class \texttt{WIR\_SiliconBugs} is shown in \cref{lst:wiroptsilicon1} of \cref{lst:wiroptsilicon}.
+It receives a reference to a \gls{WIR} function to be optimized as first argument, followed by a string containing some ID of the detected silicon bug according to the manufacturer's documentation.
+This string is used to attach a comment to the optimized code snippet that indicates that this particular code structure prevents a certain silicon bug.
+Finally, the constructor expects the peephole's size and whether peepholes may span over several basic blocks, see \cref{lst:wiroptpeep}.
+
+\begin{lstlisting}[style=code,float=!t,caption={Constructor of Class \texttt{WIR\_SiliconBugs}},label=lst:wiroptsilicon]
+// Default constructor for function-level optimization.
+WIR_SiliconBugs::WIR_SiliconBugs@(@ WIR_Function æ&æf, ästd::stringä æ&&æn, @unsigned int@ s, @bool@ c æ=æ false @)@;Ü\label{lst:wiroptsilicon1}Ü
+\end{lstlisting}
+
+For the Infineon TriCore TC1796 chip, the \gls{WIR} silicon bugs optimizers consider errata sheet~\cite{tc179608} and work around bug IDs CPU\_TC.013, CPU\_TC.048, CPU\_TC.060, CPU\_TC.065, CPU\_TC.069, CPU\_TC.070, CPU\_TC.071, CPU\_TC.072, CPU\_TC.081, CPU\_TC.082, CPU\_TC.083, CPU\_TC.094, CPU\_TC.095, CPU\_TC.096 and CPU\_ TC.105.
+Silicon bug ID CPU\_TC.106 of the TC1797 chip is fixed according to~\cite{tc179709}.
+In many cases, the workaround consists of inserting a \texttt{NOP} operation at specific places in a critical code sequence, which underlines the very local, peephole style of transformation.
+All TriCore silicon bug optimizers reside as dedicated classes in directory \texttt{WIR/arch/tricore/optimizations/siliconbugs}.
+
+
+%-------------------------------------------------------------------------
+\section{Local Instruction Scheduling}
+\label{sec:optsched}
+%-------------------------------------------------------------------------
+
+\begin{tabular}{|l|l|l|}
+  \hline
+  \textbf{Optimization Class} & \textbf{Optimization Level} & \textbf{Architectures} \\
+  \hhline{|=|=|=|}
+  \texttt{WIR\_LocalScheduling}, & Systems -- Functions & TC1.3, TC1.3.1 \\
+  \texttt{TC\_LocalScheduling} & &  \\
+  \hline
+\end{tabular}
+
+Local instruction scheduling rearranges the order in which \gls{WIR} operations occur locally within single basic blocks.
+In general, the goals of this re-scheduling of operations are twofold: first, the flow of operations through a processor's pipeline is optimized such that, e.g., pipeline stalls are avoided; second, \gls{ILP} provided by a processor architecture can be exploited such that several operations get executed in parallel.
+Within the \gls{WIR} software model, \gls{ILP} is modeled by class \texttt{WIR\_Instruction} (see \cref{sec:instructions} on \cpageref{sec:instructions}).
+Thus, the instruction scheduler in general attempts to group operations together within one single instruction which models that all these operations are supposed to be executed within the very same execution cycle.
+
+\begin{lstlisting}[style=code,float=!b,caption={Public Interface of Class \texttt{WIR\_LocalScheduling}},label=lst:wiroptsched]
+// Default constructor for system-level optimization.
+WIR_LocalScheduling::WIR_LocalScheduling@(@ WIR_System æ&æs, const WIR_SchedulingPriority æ&æp, @bool@ v æ=æ false,                                           @bool@ t æ=æ false @)@;Ü\label{lst:wiroptsched1}Ü
+
+// Default constructor for compilation unit-level optimization.
+WIR_LocalScheduling::WIR_LocalScheduling@(@ WIR_CompilationUnit æ&æc, const WIR_SchedulingPriority æ&æp,                                                  @bool@ v æ=æ false, @bool@ t æ=æ false @)@;Ü\label{lst:wiroptsched2}Ü
+
+// Default constructor for function-level optimization.
+WIR_LocalScheduling::WIR_LocalScheduling@(@ WIR_Function æ&æf, const WIR_SchedulingPriority æ&æp, @bool@ v æ=æ false,                                         @bool@ t æ=æ false @)@;Ü\label{lst:wiroptsched3}Ü
+
+// Set that as-soon-as-possible scheduling is applied.
+@void@ WIR_LocalScheduling::setASAP@( void )@;Ü\label{lst:wiroptsched4}Ü
+
+// Set that as-late-as-possible scheduling is applied.
+@void@ WIR_LocalScheduling::setALAP@( void )@;Ü\label{lst:wiroptsched5}Ü
+\end{lstlisting}
+
+Naturally, instruction scheduling must obey dependencies between operations, i.e., \gls{RAW}, \gls{WAR}, \gls{WAW} and control dependencies.
+For this purpose, the scheduler creates the dependence graph for each basic block to be optimized.
+The nodes represent the block's operations, and directed edges are inserted in the presence of the above dependencies.
+This graph is then traversed in topological order and operations are scheduled into execution cycles such that this order is preserved.
+
+The generic and processor-independent parts of the instruction scheduler are realized by the abstract base class \texttt{WIR\_LocalScheduling} (cf. file \texttt{WIR/optimizations/scheduling/wirlocalscheduling.h}).
+Its public interface is depicted in \cref{lst:wiroptsched}.
+As can be seen, the constructors (\crefrange{lst:wiroptsched1}{lst:wiroptsched3}) allow to apply scheduling for all levels from a complete system down to single functions.
+A mandatory parameter of all constructors is a reference to a scheduling priority object.
+Its purpose is to select one operation with high priority to be scheduled next in the current execution cycle, out of several operations that could potentially be scheduled.
+Last but not least, all constructors accept two optional Boolean flags defaulting to \texttt{false} as last arguments.
+They serve for debugging purposes during the potential visualization of the dependence graph using the graph visualization tool \texttt{xdot}.
+The first Boolean \texttt{v} prints a verbose message showing the issued \texttt{xdot} command line, while argument \texttt{t} keeps the temporary DOT file containing the dependence graph on the hard disk.
+
+Schedulers classically distinguish between \gls{ASAP} and \gls{ALAP} scheduling which arranges operations at their earliest or latest convenience, resp.
+\gls{ASAP} scheduling strives to schedule an operation as soon as its predecessors in the dependence graph have finished execution.
+In \gls{ALAP} scheduling, an operation is scheduled such that it gets executed whenever its successors require its data.
+By default, class \texttt{WIR\_LocalScheduling} performs \gls{ASAP} scheduling.
+This strategy can explicitly be controlled via methods \texttt{setASAP} (cf. \cref{lst:wiroptsched4}) and \texttt{setALAP} (\cref{lst:wiroptsched5}) which require no further explanation.
+
+\begin{lstlisting}[style=code,float=!t,caption={Relevant Interface of Class \texttt{WIR\_SchedulingPriority}},label=lst:wirschedprio]
+// Default constructor.
+WIR_SchedulingPriority::WIR_SchedulingPriority@( void )@;Ü\label{lst:wirschedprio1}Ü
+
+// Copy constructor.
+WIR_SchedulingPriority::WIR_SchedulingPriority@(@ const WIR_SchedulingPriority &p @)@;Ü\label{lst:wirschedprio2}Ü
+
+// Get an operation's scheduling priority.
+virtual @long long@ WIR_SchedulingPriority::getPriority@(@ const WIR_Operation æ&æo @)@ const æ=æ §0§;Ü\label{lst:wirschedprio3}Ü
+
+// Get the operation sequence with best scheduling priority for a given execution cycle.
+ästd::listäæ<æWIR_Operation æ*>æ WIR_SchedulingPriority::getBestOperations@( long long@ c, WIR_Instruction æ*æi @)@;Ü\label{lst:wirschedprio4}Ü
+\end{lstlisting}
+
+Class \texttt{WIR\_SchedulingPriority} (see file \texttt{WIR/optimizations/scheduling/wirschedulingpriority.h}) is an abstract base class that generically models different priorities that can be assigned to \gls{WIR} operations during scheduling.
+The relevant parts of its interface are shown in \cref{lst:wirschedprio}.
+There is nothing to say about the constructors from \cref{lst:wirschedprio1,lst:wirschedprio2}.
+Priorities are modeled using the standard data type \texttt{long long} so that \texttt{getPriority} (\cref{lst:wirschedprio3}) is a purely virtual method that returns such a priority value for a given operation.
+Priorities are interpreted literally, i.e., the higher the \texttt{long long} value determined by \texttt{getPriority}, the higher the operation's priority.
+Based on such priorities, \texttt{getBestOperations} (\cref{lst:wirschedprio4}) determines those operations that should best be grouped together for some given execution cycle.
+
+For each basic block, the \gls{WIR} scheduler begins with the starting execution cycle 0, determines those operations to be scheduled in this current cycle, and continues with the next cycle.
+This scheme is directly supported by method \texttt{getBestOperations}: it gets the current execution cycle into which operations shall be scheduled as first argument.
+Furthermore, the \gls{WIR} instruction containing all operations scheduled in the previous cycle (if any) serves as second argument.
+A list of pointers to operations is finally returned that should be scheduled together and that thus should form the next instruction inside the current basic block.
+
+Currently, \gls{WIR} supports the following heuristics to determine scheduling priorities:
+\begin{description}
+  \item[Maximum Delays:] The maximum delay represents the length of the longest path from an operation to the basic block's very last operation within the dependence graph.
+  The higher the maximum delay is, the higher is a node's scheduling priority.
+  \item[Mobility:] Mobility models the flexibility that an operation has within the dependence graph to be scheduled.
+  More precisely, an operation's mobility is the difference between its latest- and earliest-possible execution cycle.
+  Operations with a high mobility are not severely constrained in the dependence graph and thus get a high scheduling priority.
+  \item[Number of Successors:] This measure aims to quantify how many other, dependent operations potentially get enabled and their dependencies met by executing some other operation.
+  Consequently, operations with a large fan-out in the dependence graph obtain a high scheduling priority.
+\end{description}
+
+\begin{figure}[t]
+  \begin{center}
+    \includegraphics[width=0.94\textwidth]{schedulingprios.png}
+  \end{center}
+  \caption{Inheritance Diagram of Scheduling Priority Classes}
+  \label{fig:schedprio}
+\end{figure}
+
+These heuristics are realized by classes \texttt{WIR\_MaxDelayPriority}, \texttt{WIR\_MobilityPriority} and \texttt{WIR\_NoOf\-SuccsPriority} (located in directory \texttt{WIR/optimizations/scheduling}) that all inherit from the above base class as depicted in \cref{fig:schedprio}.
+The interfaces of all these derived classes do not differ from what is shown in \cref{lst:wirschedprio}.
+
+Processor-specific realizations of this instruction scheduler for the Infineon TriCore models are in turn derived using inheritance.
+Thus, the overall TriCore scheduler comes with class \texttt{TC\_LocalScheduling} located in file \texttt{WIR/arch/tricore/optimizations/scheduling/tclocalscheduling.h}.
+The TriCore-specific scheduling priorities (i.e., classes \texttt{TC\_MaxDelayPriority}, \texttt{TC\_MobilityPriority} and \texttt{TC\_NoOfSuccsPriority} shown in \cref{fig:schedprio}) exploit detailed pipelining and timing information taken from the manufacturer's data sheets.
+
+
+\cleardoubleoddpage

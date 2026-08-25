@@ -1,0 +1,67 @@
+digraph G {
+graph [rotate=90]
+subgraph clusterLegend {
+0[label="Operation",shape=box]
+;
+2[label="Sink Node",shape=box,style=dashed]
+;
+3[label="Immediate Value",style=dotted]
+;
+4[label="External Register",style=dotted,shape=hexagon]
+;
+}
+116 [label="x10",style=dotted,shape=hexagon]
+;
+123 [label=2,style=dotted]
+;
+subgraph cluster124 {
+113 [label="x10,",color=white,shape=box]
+;
+118 [label="2",color=white,shape=box]
+;
+127 [label="x_3,",color=white,shape=box]
+;
+128 [label="srli",color=white,shape=box]
+;
+}
+subgraph cluster129 {
+130 [label="7",color=white,shape=box]
+;
+131 [label="x_3,",color=white,shape=box]
+;
+132 [label="x_4,",color=white,shape=box]
+;
+133 [label="andi",color=white,shape=box]
+;
+}
+134 [label=7,style=dotted]
+;
+subgraph cluster151 {
+152 [label="4",color=white,shape=box]
+;
+153 [label="x_4,",color=white,shape=box]
+;
+154 [label="x_5,",color=white,shape=box]
+;
+155 [label="xori",color=white,shape=box]
+;
+}
+156 [label=4,style=dotted]
+;
+159[label="",style=dashed,shape=box]
+;
+116->113 [label=< <table border="0"><tr><td>Dn:</td><td>L( x10[ 31 - 0 ] )</td></tr><tr><td>Up:</td><td>XXXX XXXX XXXX XXXX XXXX XXXX XXXL( x10[ 4 - 2 ] )XX</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+123->118 [label=< <table border="0"><tr><td>Dn:</td><td>0000 0000 0010</td></tr><tr><td>Up:</td><td>XXXX XXX0 0010</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+134->130 [label=< <table border="0"><tr><td>Dn:</td><td>0000 0000 0111</td></tr><tr><td>Up:</td><td>0000 0000 0111</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+156->152 [label=< <table border="0"><tr><td>Dn:</td><td>0000 0000 0100</td></tr><tr><td>Up:</td><td>0000 0000 0100</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+127->131 [label=< <table border="0"><tr><td>Dn:</td><td>00L( x10[ 31 - 2 ] )</td></tr><tr><td>Up:</td><td>XXXX XXXX XXXX XXXX XXXX XXXX XXXX XL( x10[ 4 - 2 ] )</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+132->153 [label=< <table border="0"><tr><td>Dn:</td><td>0000 0000 0000 0000 0000 0000 0000 0L( x10[ 4 - 2 ] )</td></tr><tr><td>Up:</td><td>XXXX XXXX XXXX XXXX XXXX XXXX XXXX XL( x10[ 4 - 2 ] )</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+154->159 [label=< <table border="0"><tr><td>Dn:</td><td>0000 0000 0000 0000 0000 0000 0000 0N( x10[ 4 ] )L( x10[ 3 - 2 ] )</td></tr><tr><td>Up:</td><td>XXXX XXXX XXXX XXXX XXXX XXXX XXXX XN( x10[ 4 ] )L( x10[ 3 - 2 ] )</td></tr></table> >,dir=forward,arrowhead=vee,arrowtail=none]
+;
+}

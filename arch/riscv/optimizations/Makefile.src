@@ -1,0 +1,6 @@
+include arch/riscv/optimizations/constfold/Makefile.src
+include arch/riscv/optimizations/constprop/Makefile.src
+include arch/riscv/optimizations/deadcode/Makefile.src
+include arch/riscv/optimizations/gcregallocation/Makefile.src
+include arch/riscv/optimizations/operationbitwidths/Makefile.src
+include arch/riscv/optimizations/redundantcode/Makefile.src

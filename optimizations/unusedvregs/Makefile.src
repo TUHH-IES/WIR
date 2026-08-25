@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/unusedvregs/wirunusedvregs.cc optimizations/unusedvregs/wirunusedvregs.h

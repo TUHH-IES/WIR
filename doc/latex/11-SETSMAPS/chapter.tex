@@ -1,0 +1,112 @@
+%=========================================================================
+\chapter{Basic Set and Map Data Structures}
+\label{chap:setsmaps}
+\renewcommand{\sectiontitle}{}
+%=========================================================================
+
+The \glspl{API} of the various classes presented in the previous \crefrange{chap:swmodel}{chap:sysmodel} regularly use sets containing \gls{WIR} objects like, e.g., \texttt{WIR\_BasicBlockSet}, \texttt{WIR\_SectionSet} or \texttt{WIR\_SymbolSet}.
+In general, sets of objects as well as maps that associate specific additional data with objects used as keys play an important role.
+As the \gls{WIR} library is implemented in C++17, it is natural to use standard \gls{STL} containers like \texttt{std::set} and \texttt{std::map} for this purpose.
+Of course, such containers should not contain the actual \gls{WIR} objects as this would result in severe copying overheads and the risk of corrupt data structures.
+Thus, a straightforward realization of, e.g., a set of basic blocks would be to use a set of pointers to basic blocks such as \texttt{std::set<WIR\_BasicBlock *>}.
+However, \gls{WIR} is designed to never publicly expose such kinds of data structures for the following reasons:
+\begin{itemize}
+  \item As motivated in \cref{sec:keyfeatures} on \cpageref{sec:keyfeatures}, the \gls{API} of \gls{WIR} is intentionally kept free of pointers as much as possible.
+  Instead, wrapped references are heavily used in order to avoid memory mismanagement, which is why the standard class \texttt{std::reference\_wrapper} regularly appeared in earlier chapters.
+  \item Such sets or maps of \gls{WIR} objects are regularly traversed and iterated.
+  This, however, is non-deterministic if pointers are used as keys.
+  Internally, these \gls{STL} sets and maps are ordered by the actual addresses of the pointers.
+  These addresses are determined by the host system's operating system and cannot be controlled within the \gls{WIR} library.
+  Thus, depending on whether a \gls{WIR} application gets executed on this or the other host machine, or whether the host's current memory usage is high or low, completely different addresses are assigned to \gls{WIR} objects.
+  This may lead to varying, non-deterministic orders of objects within their sets or maps and thus in different orders how \gls{WIR} iterates and thus processes them.
+  Such behavior opens the door to numerous kinds of undesired behaviors and bugs that are extremely hard to debug.
+\end{itemize}
+
+In order to address the issues above, \gls{WIR} features deterministic mechanisms that allow to obtain a unique numerical identifier for (almost) all kinds of \gls{WIR} objects.
+These identifiers and their underlying \gls{API} are specified in \cref{sec:ids}.
+\cref{sec:determinism} describes the way how these IDs are used to declare deterministic set- and map-based data structures.
+
+
+%-------------------------------------------------------------------------
+\section{Unique Numerical Identifiers}
+\label{sec:ids}
+%-------------------------------------------------------------------------
+
+In a straightforward data structure like, e.g., the abovementioned \texttt{std::set<WIR\_BasicBlock *>}, the actual address of a pointer serves as unique key.
+This bases on the assumption that \gls{WIR} objects such as basic blocks all have different and unique addresses in memory so that they are uniquely identified by their pointers' addresses.
+In order to remove pointers as unique identifiers from deterministic \gls{WIR} data structures, some other mechanism is required that allows to clearly distinguish between two \gls{WIR} objects and to arrange them properly in ordered data structures such as sets or maps.
+
+This mechanism providing unique numerical identifiers for \gls{WIR} objects is realized by class \texttt{WIR\_ID\_API}.
+This is a very simple base class from which all the classes presented in \crefrange{chap:lists}{chap:sysmodel} (and many others) publicly inherit so that its \gls{API} shown in \cref{lst:wiridapi} is available (almost) everywhere within \gls{WIR}.
+This class internally maintains a static counter that is incremented every time that a new object of a derived class is constructed.
+The current counter value is stored for each newly constructed object, thus representing a unique ID of each \gls{WIR} object.
+
+The data type \texttt{WIR\_id\_t} that is used everywhere within \gls{WIR} to represent IDs is declared to be \texttt{unsigned long long} (cf. \cref{lst:wiridapi1}).
+Two operators \texttt{==} and \texttt{!=} for equality and inequality tests are declared in \cref{lst:wiridapi2,lst:wiridapi3}.
+These operators do not do any kind of semantical test whether two \gls{WIR} objects are equal or inequal.
+Instead, only the IDs of both objects are compared.
+If this behavior is undesired, both operators can be overridden in derived classes, since they are declared to be virtual.
+Finally, method \texttt{getID} (\cref{lst:wiridapi4}) can be used to retrieve an object's unique identifier.
+
+\begin{lstlisting}[style=code,float=t,caption={Handling of Unique Object Identifiers by Class \texttt{WIR\_ID\_API}},label=lst:wiridapi]
+// Type WIR_id_t represents unique numerical IDs of WIR objects.
+using WIR_id_t æ=æ unsigned long long;Ü\label{lst:wiridapi1}Ü
+
+// Determine whether the IDs of two WIR objects are equal.
+virtual @bool@ WIR_ID_API::operator æ==æ @(@ const WIR_ID_API æ&æi @)@ const;Ü\label{lst:wiridapi2}Ü
+
+// Determine whether the IDs of two WIR objects are inequal.
+virtual @bool@ WIR_ID_API::operator æ!=æ @(@ const WIR_ID_API æ&æi @)@ const;Ü\label{lst:wiridapi3}Ü
+
+// Get a WIR object's unique ID.
+WIR_id_t WIR_ID_API::getID@( void )@ const;Ü\label{lst:wiridapi4}Ü
+\end{lstlisting}
+
+
+%-------------------------------------------------------------------------
+\section{Deterministic WIR Data Structures}
+\label{sec:determinism}
+%-------------------------------------------------------------------------
+
+Whenever sets of \gls{WIR} objects have been introduced in earlier chapters, this guide on purpose used the formulation ``is basically defined as \texttt{std::set<std::reference\_wrapper<...>{}>} within \gls{WIR}'', see e.g., the running example \texttt{WIR\_BasicBlockSet} on \cpageref{def:bbset}.
+This, however, is not the complete truth, as this formulation lacks any implementation details making such a set (or map) deterministic.
+
+\begin{lstlisting}[style=code,float=!b,caption={Declaration of Deterministic Data Structures in file \texttt{wirtypes.h}},label=lst:wirsets]
+// Comparison class to sort sets and maps of WIR objects uniquely by their IDs.
+templateæ<ætypename Tæ>æ struct WIR_CompareÜ\label{lst:wirsets1}Ü
+æ{æ
+  inline @bool@ operator@()(@ const ästd::reference_wrapperäæ<æTæ> &ælhs, const ästd::reference_wrapperäæ<æTæ> &ærhs @)@ constÜ\label{lst:wirsets2}Ü
+  æ{æ
+    return@(@ lhs.get@()@.getID@()@ < rhs.get@()@.getID@()@ @)@;Ü\label{lst:wirsets3}Ü
+  æ}æ;
+æ}æ;Ü\label{lst:wirsets4}Ü
+
+// WIR_BasicBlockSet represents deterministic sets of references to WIR basic blocks.
+using WIR_BasicBlockSet æ=æ ästd::setäæ<æästd::reference_wrapperäæ<æWIR_BasicBlockæ>æ, WIR_Compareæ<æWIR_BasicBlockæ>>æ;Ü\label{lst:wirsets5}Ü
+
+// WIR_SectionSet represents deterministic sets of references to WIR sections.
+using WIR_SectionSet æ=æ ästd::setäæ<æästd::reference_wrapperäæ<æWIR_Sectionæ>æ, WIR_Compareæ<æWIR_Sectionæ>>æ;Ü\label{lst:wirsets6}Ü
+
+// WIR_SymbolSet represents deterministic sets of references to WIR symbols.
+using WIR_SymbolSet æ=æ ästd::setäæ<æästd::reference_wrapperäæ<æWIR_Symbolæ>æ, WIR_Compareæ<æWIR_Symbolæ>>æ;Ü\label{lst:wirsets7}Ü
+
+...
+\end{lstlisting}
+
+To achieve this property, \gls{WIR} exploits that the standard \gls{STL} containers for sets and maps can be used in combination with a custom C++ comparison class that in turn determines the ordering of elements within a set or map.
+This comparison class as well as all basic deterministic data structures of \gls{WIR} are declared centrally in the source directory in file \texttt{WIR/wir/wirtypes.h}.
+An excerpt of this header file is given in \cref{lst:wirsets}.
+
+The comparison class shown in \crefrange{lst:wirsets1}{lst:wirsets4} is one of the very few cases of a template-based class within \gls{WIR}.
+It allows to to perform generic less-than comparisons for any kind of class \texttt{T} that is derived from \texttt{WIR\_ID\_API}.
+This comparison class gets two (wrapped) references as argument in \cref{lst:wirsets2} and simply performs a numerical less-than comparison of the objects' unique and deterministic IDs (\cref{lst:wirsets3}).
+
+This comparison class is then used in the declarations of \gls{WIR} sets of, e.g., basic blocks, sections or symbols.
+This is shown in \crefrange{lst:wirsets5}{lst:wirsets7} where the generic comparison class is specialized towards, e.g., class \texttt{WIR\_BasicBlock}.
+The \gls{STL} containers resulting from these declarations now internally sort all their entries according to their IDs which, as motivated in \cref{sec:ids}, no longer on \gls{WIR}-external effects such as host memory addresses.
+
+The entire \gls{WIR} library internally uses only such deterministic data structures whenever sets or maps need to be iterated.
+It is good practice that application code using \gls{WIR} also follows this scheme and uses the comparator class from \cref{lst:wirsets}.
+
+
+\cleardoubleoddpage

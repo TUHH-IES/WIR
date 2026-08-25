@@ -1,0 +1,63 @@
+digraph G {
+graph [rotate=90]
+subgraph clusterLegend {
+0[label="Basic Block",shape=box]
+;
+1[label="Start Block",shape=box,style=bold]
+;
+2[shape=point]
+;
+3[shape=point]
+;
+2->3[label="Regular edge",dir=forward,arrowhead=vee,arrowtail=none]
+;
+4[shape=point]
+;
+5[shape=point]
+;
+4->5[label="True edge",dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+6[shape=point]
+;
+7[shape=point]
+;
+6->7[label="Back edge",dir=forward,arrowhead=vee,arrowtail=none,style=dashed]
+;
+10[label="foo",color=white]
+;
+}
+11 [label=< <b>foo</b> >,shape=box,style=bold]
+;
+12 [label=< <b>.L5654</b> >,shape=box]
+;
+13 [label=< <b>.L5655</b> >,shape=box]
+;
+14 [label=< <b>.L5656</b> >,shape=box]
+;
+15 [label=< <b>.L5657</b> >,shape=box,style=bold]
+;
+16 [label=< <b>.L5658</b> >,shape=box]
+;
+17 [label=< <b>.L5659</b> >,shape=box]
+;
+18 [label=< <b>.L5660</b> >,shape=box]
+;
+11->12[dir=forward,arrowhead=vee,arrowtail=none]
+;
+11->18[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+12->13[dir=forward,arrowhead=vee,arrowtail=none]
+;
+12->16[dir=forward,arrowhead=vee,arrowtail=none,style=bold]
+;
+13->14[dir=forward,arrowhead=vee,arrowtail=none]
+;
+14->12[dir=forward,arrowhead=vee,arrowtail=none,style=dashed]
+;
+15->16[dir=forward,arrowhead=vee,arrowtail=none]
+;
+16->17[dir=forward,arrowhead=vee,arrowtail=none]
+;
+17->11[dir=forward,arrowhead=vee,arrowtail=none,style=dashed]
+;
+}

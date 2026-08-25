@@ -1,0 +1,62 @@
+\usepackage{listings}
+\AtBeginDocument{% avoid listing's defaults overwrite the following:
+  \DeclareTOCStyleEntry[%
+    dynnumwidth=true%
+  ]{tocline}{section}%
+  \DeclareTOCStyleEntries[%
+    indent=-0ex,% negative?
+    dynnumwidth=true%
+  ]{tocline}{figure,table,lstlisting}%
+}
+\usepackage{scrhack}
+
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage[english]{babel}
+\usepackage{enumitem}
+
+\usepackage[T1]{fontenc}
+\usepackage[scaled=0.95]{beramono}
+
+\usepackage[utf8]{inputenc}
+\usepackage{csquotes}
+\usepackage{dingbat}
+\usepackage{fancyvrb}
+\usepackage[edges]{forest}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{helvet}
+\usepackage{hhline}
+\usepackage[pdftex,
+            pdfauthor={Heiko Falk},
+            pdftitle={The WCC Compiler Intermediate Representation (WIR)},
+            pdfsubject={Build \& Installation Guide, User's Guide, Retargeting Guide, Developer's Guide},
+            pdfkeywords={},
+            pdfpagelabels,
+            pdfpagemode=UseThumbs,pdfstartview=Fit,pdfnewwindow=true,
+            colorlinks=true,
+            linkcolor=blue,citecolor=blue,urlcolor=blue,filecolor=blue
+            ]{hyperref}
+\usepackage{bookmark}
+\usepackage{multirow}
+\usepackage[singlespacing=true]{scrlayer-scrpage}
+\usepackage{siunitx}
+\usepackage{spverbatim}
+\usepackage{caption,subcaption}
+\usepackage{tabularx}
+\usepackage{tabulary}
+\usepackage[breakable,skins]{tcolorbox}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{xspace}
+
+\usepackage[capitalise]{cleveref}
+
+\usepackage[xindy,acronym,nonumberlist,style=long,nomain]{glossaries}
+\usepackage{glossary-mcols}
+
+\usepackage{doi}
+\usepackage{biblatex}
+\addbibresource{wir.bib}
+
+\usepackage{amssymb}

@@ -1,0 +1,47 @@
+graph G {
+graph [rotate=90]
+21[label=< <table border="0"><tr><td>a2<br />(col 17)</td></tr></table> >,style=filled,fillcolor=burlywood1,shape=box]
+;
+22[label=< <table border="0"><tr><td>a3<br />(col 18)</td></tr></table> >,style=filled,fillcolor=orangered1,shape=box]
+;
+23[label=< <table border="0"><tr><td>a4<br />(col 19)</td></tr></table> >,style=filled,fillcolor=goldenrod1,shape=box]
+;
+24[label=< <table border="0"><tr><td>a5<br />(col 20)</td></tr></table> >,style=filled,fillcolor=darkolivegreen1,shape=box]
+;
+25[label=< <table border="0"><tr><td>a6<br />(col 21)</td></tr></table> >,style=filled,fillcolor=darkturquoise,shape=box]
+;
+26[label=< <table border="0"><tr><td>a7<br />(col 22)</td></tr></table> >,style=filled,fillcolor=blueviolet,shape=box]
+;
+27[label=< <table border="0"><tr><td>a12<br />(col 23)</td></tr></table> >,style=filled,fillcolor=darkviolet,shape=box]
+;
+28[label=< <table border="0"><tr><td>a13<br />(col 24)</td></tr></table> >,style=filled,fillcolor=deeppink1,shape=box]
+;
+29[label=< <table border="0"><tr><td>a14<br />(col 25)</td></tr></table> >,style=filled,fillcolor=chocolate1,shape=box]
+;
+30[label=< <table border="0"><tr><td>a15<br />(col 26)</td></tr></table> >,style=filled,fillcolor=darkorange2,shape=box]
+;
+31[label=< <table border="0"><tr><td>d_6105</td></tr></table> >]
+;
+33[label=< <table border="0"><tr><td>d_6115<br />(col 3/d2)</td></tr></table> >,style=filled,fillcolor=darkgoldenrod1]
+;
+31--21[arrowhead=none,arrowtail=none]
+;
+31--22[arrowhead=none,arrowtail=none]
+;
+31--23[arrowhead=none,arrowtail=none]
+;
+31--24[arrowhead=none,arrowtail=none]
+;
+31--25[arrowhead=none,arrowtail=none]
+;
+31--26[arrowhead=none,arrowtail=none]
+;
+31--27[arrowhead=none,arrowtail=none]
+;
+31--28[arrowhead=none,arrowtail=none]
+;
+31--29[arrowhead=none,arrowtail=none]
+;
+31--30[arrowhead=none,arrowtail=none]
+;
+}

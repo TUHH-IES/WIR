@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += optimizations/redundantcode/wirredundantcode.cc optimizations/redundantcode/wirredundantcode.h

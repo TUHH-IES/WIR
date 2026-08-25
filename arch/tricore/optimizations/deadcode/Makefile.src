@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/tricore/optimizations/deadcode/tcdeadcode.cc arch/tricore/optimizations/deadcode/tcdeadcode.h

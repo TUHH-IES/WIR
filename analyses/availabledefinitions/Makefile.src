@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += analyses/availabledefinitions/wiravailabledefinitionsanalysis.cc analyses/availabledefinitions/wiravailabledefinitionsanalysis.h

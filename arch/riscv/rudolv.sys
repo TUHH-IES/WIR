@@ -1,0 +1,117 @@
+#
+#
+#  This script belongs to the
+#
+#    WCC Intermediate Representation (WIR) Framework
+#
+#  Permission to use this software is granted according to the license provided
+#  with this software distribution, and according to the attribution section in
+#  the README file found in the top-level directory of this distribution.
+#
+#   Copyright 2015 - 2026, Heiko Falk.
+#
+#
+
+
+###############################################################################
+#
+#  System specification of the RISC-V implementation RudolV.
+#
+#  Referring to the RudolV implementation in https://github.com/bobbl/rudolv
+#
+#  For details about the syntax and semantics of the directives in this file,
+#  please refer to the doxygen documentation of class WIR_SystemConfig.
+#
+
+#
+# The RISC-V RudolV comprises the following one memory:
+#
+# 0x0000.0000,  64 KB: Main SRAM
+#
+# RudolV's bootloader memory is implementation specific and is thus not modeled
+# here.
+#
+
+#
+# RISC-V RudolV
+#
+[rudolv]
+type               = system
+
+
+#
+# Processor Core (ISA RV32IMC)
+#
+[CORE0]
+type               = core
+isa                = RV32IMC
+#clockfreq          = ???
+#voltage            = ???
+
+
+#
+# Internal RAM (SRAM; L1, Code)
+#
+[CODE-SRAM]
+type               = memory
+origin             = 0x0000000
+length             = 0x8000     # 32K
+attributes         = RXA        # read/execute/allocatable
+cycles             = 1
+sections           = .text
+hierarchy          = CORE0
+
+
+#
+# Internal RAM (SRAM; L1, Data)
+#
+[DATA-SRAM]
+type               = memory
+origin             = 0x8000
+length             = 0x4000     # 16K
+attributes         = RWA        # read/write/allocatable
+cycles             = 1
+sections           = .data .bss .sbss .sdata .zbss .zdata
+hierarchy          = CORE0
+
+
+#
+# Internal RAM (SRAM; L1, Read-Only Data)
+#
+[RODATA-SRAM]
+type               = memory
+origin             = 0xC000
+length             = 0x2000     # 8K
+attributes         = R          # read
+cycles             = 1
+sections           = .rodata
+hierarchy          = CORE0
+
+
+#
+# Stack, part of Internal RAM (SRAM; L1)
+#
+[STACK-SRAM]
+type               = memory
+origin             = 0xE000
+length             = 0x2000     # 8K
+attributes         = RW         # read/write
+cycles             = 1
+sections           = .stack
+hierarchy          = CORE0
+
+
+#
+# ELF Section properties
+#
+[.bss]
+type               = section
+#block              = ???
+
+[.data]
+type               = section
+#block              = ???
+
+[.rodata]
+type               = section
+#block              = ???

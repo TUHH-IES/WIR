@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += analyses/duudchain/wirduudchainanalysis.cc analyses/duudchain/wirduudchainanalysis.h

@@ -1,0 +1,1 @@
+libwir_la_SOURCES      += arch/riscv/optimizations/deadcode/rvdeadcode.cc arch/riscv/optimizations/deadcode/rvdeadcode.h
