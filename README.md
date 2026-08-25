@@ -15,7 +15,7 @@ Over and above the legal restrictions imposed by this license, if you use this s
 or in the form of attributions directly in this code such as
 
   H. Falk. WIR: The WCC Intermediate Representation, v3.0 (2026).
-  [https://github.com/TUHH-IES/WIR], Zenodo DOI.
+  [https://github.com/TUHH-IES/WIR], [![DOI](https://zenodo.org/badge/1346509309.svg)](https://doi.org/10.5281/zenodo.22102094).
 
 or (ideally) both.
 
@@ -44,7 +44,7 @@ The folder doc contains the documentation for WIR.
 
 Clone the entire repository including its submodules using:
 ```
-  git clone --recurse-submodules https://github.com/TUHH-IES/WIR
+git clone --recurse-submodules https://github.com/TUHH-IES/WIR
 ```
 
 Hereafter, see chapters 2-5 (Build & Installation Guide) of file doc/wir.pdf.
