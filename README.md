@@ -15,7 +15,7 @@ Over and above the legal restrictions imposed by this license, if you use this s
 or in the form of attributions directly in this code such as
 
   H. Falk. WIR: The WCC Intermediate Representation, v3.0 (2026).
-  github.com/cknight/acds, Zenodo DOI.
+  [https://github.com/TUHH-IES/WIR], Zenodo DOI.
 
 or (ideally) both.
 
