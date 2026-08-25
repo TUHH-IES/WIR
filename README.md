@@ -42,4 +42,9 @@ The folder doc contains the documentation for WIR.
 
 ## Build & Installation
 
-See chapters 2-5 (Build & Installation Guide) of file doc/wir.pdf.
+Clone the entire repository including its submodules using:
+```
+  git clone --recurse-submodules https://github.com/TUHH-IES/WIR
+```
+
+Hereafter, see chapters 2-5 (Build & Installation Guide) of file doc/wir.pdf.
