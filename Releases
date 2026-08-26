@@ -194,7 +194,7 @@ release 2.1 (2026-04-12)
         Added virtual RISC-V quad-registers for 128-bits wide long doubles.
         Added RISC-V redundant code elimination.
 
-release 3.0 (2026-08-25)
+release 3.0 (2026-08-25, DOI 10.5281/zenodo.22102498)
 
         Fixed and extended some RISC-V RV32IF operation formats.
         Extended RISC-V graph coloring-based register allocator by RV32IF
