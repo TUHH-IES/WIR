@@ -3,3 +3,10 @@ libwir_la_SOURCES      += flowfacts/wirentrypoint.cc flowfacts/wirentrypoint.h \
                           flowfacts/wirflowfactupdater.cc flowfacts/wirflowfactupdater.h \
                           flowfacts/wirflowrestriction.cc flowfacts/wirflowrestriction.h \
                           flowfacts/wirloopbound.cc flowfacts/wirloopbound.h
+
+flowincludedir          = ${includedir}/flowfacts
+flowinclude_HEADERS     = flowfacts/wirentrypoint.h \
+                          flowfacts/wirflowfact.h \
+                          flowfacts/wirflowfactupdater.h \
+                          flowfacts/wirflowrestriction.h \
+                          flowfacts/wirloopbound.h

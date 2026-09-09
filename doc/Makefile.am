@@ -12,7 +12,8 @@
 SUBDIRS			= latex
 
 BUILT_SOURCES		=
-EXTRA_DIST		= doxygen.conf.in Footer.html
+pkgdata_DATA		= wir.pdf
+EXTRA_DIST		= doxygen.conf.in Footer.html wir.pdf
 
 if WITH_DOXYGEN_DOC
 

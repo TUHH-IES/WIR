@@ -11,3 +11,18 @@ libwir_la_SOURCES      += analyses/structuralcontrolflow/wirbasicblocktreenode.c
 			  analyses/structuralcontrolflow/wirstructuralanalysis.cc analyses/structuralcontrolflow/wirstructuralanalysis.h \
 			  analyses/structuralcontrolflow/wirswitchcasetreenode.cc analyses/structuralcontrolflow/wirswitchcasetreenode.h \
 			  analyses/structuralcontrolflow/wirwhilelooptreenode.cc analyses/structuralcontrolflow/wirwhilelooptreenode.h
+
+ascfincludedir          = ${includedir}/analyses/structuralcontrolflow
+ascfinclude_HEADERS     = analyses/structuralcontrolflow/wirbasicblocktreenode.h \
+			  analyses/structuralcontrolflow/wirblocktreenode.h \
+			  analyses/structuralcontrolflow/wircontroltreenode.h \
+			  analyses/structuralcontrolflow/wirhierarchicalcfg.h \
+			  analyses/structuralcontrolflow/wirifthenelsetreenode.h \
+			  analyses/structuralcontrolflow/wirifthentreenode.h \
+			  analyses/structuralcontrolflow/wirimpropertreenode.h \
+			  analyses/structuralcontrolflow/wirpropertreenode.h \
+			  analyses/structuralcontrolflow/wirnaturallooptreenode.h \
+			  analyses/structuralcontrolflow/wirselflooptreenode.h \
+			  analyses/structuralcontrolflow/wirstructuralanalysis.h \
+			  analyses/structuralcontrolflow/wirswitchcasetreenode.h \
+			  analyses/structuralcontrolflow/wirwhilelooptreenode.h

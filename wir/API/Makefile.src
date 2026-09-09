@@ -6,3 +6,13 @@ libwir_la_SOURCES      += wir/API/wircontainerapi.cc wir/API/wircontainerapi.h \
                           wir/API/wirnameapi.cc wir/API/wirnameapi.h \
                           wir/API/wirpointerlistapi.h \
                           wir/API/wirsymboltableapi.cc wir/API/wirsymboltableapi.h
+
+apiincludedir           = ${includedir}/wir/API
+apiinclude_HEADERS      = wir/API/wircontainerapi.h \
+                          wir/API/wiridapi.h \
+                          wir/API/wirinheritableenum.h \
+                          wir/API/wirinsertionapi.h \
+                          wir/API/wirlistapi.h \
+                          wir/API/wirnameapi.h \
+                          wir/API/wirpointerlistapi.h \
+                          wir/API/wirsymboltableapi.h

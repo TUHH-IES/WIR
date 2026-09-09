@@ -45,6 +45,39 @@ libwir_la_SOURCES      += arch/arm/armaddressingmodes.cc \
                           arch/arm/armv6opcodes.cc \
                           arch/arm/armv6operationformats.cc
 
+armincludedir           = ${includedir}/arch/arm
+arminclude_HEADERS      = arch/arm/armconst3coprocessoropcode.h \
+                          arch/arm/armconst3unsigned.h \
+                          arch/arm/armconst4coprocessoropcode.h \
+                          arch/arm/armconst5rotateamount.h \
+                          arch/arm/armconst5satpos.h \
+                          arch/arm/armconst5unsigned.h \
+                          arch/arm/armconst5unsigned0.h \
+                          arch/arm/armconst6unsigned.h \
+                          arch/arm/armconst6unsigned0.h \
+                          arch/arm/armconst7unsigned.h \
+                          arch/arm/armconst8unsigned.h \
+                          arch/arm/armconst9unsigned.h \
+                          arch/arm/armconst10coprocessoroffset.h \
+                          arch/arm/armconst12unsigned.h \
+                          arch/arm/armconst16unsigned.h \
+                          arch/arm/armconst24unsigned.h \
+                          arch/arm/armhiregphysical.h \
+                          arch/arm/armhiregvirtual.h \
+                          arch/arm/armio.h \
+                          arch/arm/armloregphysical.h \
+                          arch/arm/armloregvirtual.h \
+                          arch/arm/armregphysical.h \
+                          arch/arm/armregvirtual.h \
+                          arch/arm/armv4.h \
+                          arch/arm/armv4t.h \
+                          arch/arm/armv5t.h \
+                          arch/arm/armv5te.h \
+                          arch/arm/armv5tepregphysical.h \
+                          arch/arm/armv5tepregvirtual.h \
+                          arch/arm/armv5tej.h \
+                          arch/arm/armv6.h
+
 armsysconfdir           = ${sysconfdir}/arm
 armsysconf_DATA         = arch/arm/arm7tdmi_1core.sys \
                           arch/arm/arm7tdmi_2core.sys \

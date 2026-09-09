@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/constprop/wirconstprop.cc optimizations/constprop/wirconstprop.h
+
+ocpincludedir           = ${includedir}/optimizations/constprop
+ocpinclude_HEADERS      = optimizations/constprop/wirconstprop.h

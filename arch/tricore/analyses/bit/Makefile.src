@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/tricore/analyses/bit/tcbitdfa.cc arch/tricore/analyses/bit/tcbitdfa.h
+
+tricorebitincludedir    = ${includedir}/arch/tricore/analyses/bit
+tricorebitinclude_HEADERS = arch/tricore/analyses/bit/tcbitdfa.h

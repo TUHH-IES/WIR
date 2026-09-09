@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/jumpcorrection/wirjumpcorrection.cc optimizations/jumpcorrection/wirjumpcorrection.h
+
+ojmpcorrectincludedir   = ${includedir}/optimizations/jumpcorrection
+ojmpcorrectinclude_HEADERS= optimizations/jumpcorrection/wirjumpcorrection.h

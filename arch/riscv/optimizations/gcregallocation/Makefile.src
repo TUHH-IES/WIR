@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/riscv/optimizations/gcregallocation/rvgraphcoloring.cc arch/riscv/optimizations/gcregallocation/rvgraphcoloring.h
+
+riscv32gcraincludedir   = ${includedir}/arch/riscv/optimizations/gcregallocation
+riscv32gcrainclude_HEADERS = arch/riscv/optimizations/gcregallocation/rvgraphcoloring.h

@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/tricore/optimizations/operationbitwidths/tcoperationbitwidths.cc arch/tricore/optimizations/operationbitwidths/tcoperationbitwidths.h
+
+tricoreobwincludedir    = ${includedir}/arch/tricore/optimizations/operationbitwidths
+tricoreobwinclude_HEADERS= arch/tricore/optimizations/operationbitwidths/tcoperationbitwidths.h

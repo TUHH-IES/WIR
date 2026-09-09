@@ -4,8 +4,30 @@
 \renewcommand{\sectiontitle}{}
 %=========================================================================
 
+Retrieving the most recent state of the \gls{WIR} software from Git is done easiest by recursively cloning its public repository as shown in \cref{lst:git}.
+
+\begin{lstlisting}[style=commandline,float=h,caption={Cloning of the Public Git Repository},label=lst:git]
+@/tmp/WIR@> git clone --recurse-submodules https://github.com/TUHH-IES/WIR
+Cloning into 'WIR'...
+remote: Enumerating objects: 1362, done.
+remote: Counting objects: 100% (1362/1362), done.
+remote: Compressing objects: 100% (651/651), done.
+remote: Total 1362 (delta 690), reused 1354 (delta 682), pack-reused 0 (from 0)
+Receiving objects: 100% (1362/1362), 28.44 MiB Ü\verb+|+Ü 11.99 MiB/s, done.
+Resolving deltas: 100% (690/690), done.
+Submodule 'LIBUSEFUL' (https://github.com/TUHH-IES/LIBUSEFUL) registered for path 'LIBUSEFUL'
+Cloning into '/tmp/WIR/LIBUSEFUL'...
+remote: Enumerating objects: 65, done.
+remote: Counting objects: 100% (65/65), done.
+remote: Compressing objects: 100% (50/50), done.
+remote: Total 65 (delta 20), reused 57 (delta 12), pack-reused 0 (from 0)
+Receiving objects: 100% (65/65), 55.73 KiB Ü\verb+|+Ü 2.79 MiB/s, done.
+Resolving deltas: 100% (20/20), done.
+Submodule path 'LIBUSEFUL': checked out 'd0aa3ccdd71572c5bb32dbad09a0966a46645e5a'
+\end{lstlisting}
+
 \cref{fig:wircodedirectory} depicts the overall directory structure of the \gls{WIR} software package.
-The top-level directory \texttt{WIR} contains a couple of files specifying authors having contributed to the software, the license from \cref{sec:license}, a brief readme file, and the documentation about the major release versions of \gls{WIR}.
+The top-level directory \texttt{WIR} contains a couple of files specifying authors having contributed to the software, a citation file, the license from \cref{sec:license}, a brief readme file, and the documentation about the major release versions of \gls{WIR}.
 The most important file in this top-level directory is \texttt{Makefile.bootstrap} which serves to bootstrap the software package after it has been checked out of its repository (cf. \cref{sec:bootstrap}).
 
 \begin{figure}[!t]
@@ -31,7 +53,9 @@ The most important file in this top-level directory is \texttt{Makefile.bootstra
           [tricore]
         ]
         [containers]
-        [doc]
+        [doc
+          [wir.pdf, file]
+        ]
         [flowfacts]
         [optimizations
           [constfold]
@@ -46,9 +70,10 @@ The most important file in this top-level directory is \texttt{Makefile.bootstra
           [\dots, file]
         ]
         [AUTHORS, file]
+        [CITATION.cff, file]
         [LICENSE, file]
         [Makefile.bootstrap, file]
-        [README, file]
+        [README.md, file]
         [Releases, file]
       ]
     \end{forest}
@@ -82,14 +107,6 @@ Sub-directory \texttt{doc} is the place where the entire documentation of \gls{W
 
 Finally, sub-directory \texttt{DEBUGMACRO\_CONF} contains configuration files that can be used to control the activation or deactivation of introspection output produced by \gls{WIR} (cf. \cref{sec:wirmacros}).
 This debug infrastructure bases on a small but useful support library which resides in sub-directory \texttt{LIBUSEFUL}~\cite{libuseful}.
-
-Due to its importance, \cref{fig:wirarchdirectory} shows the structure of the \texttt{arch} sub-directory in more detail.
-Since the Infineon TriCore \gls{ISA} is the most complete one within \gls{WIR}, this diagram focuses on the \texttt{arch/tricore} directory tree, but the structure for the other \glspl{ISA} available within \gls{WIR} is comparable.
-
-Each \gls{ISA} is implemented via C++ specializations of generic \gls{WIR} classes, comprising, e.g., the inherited classes \texttt{TC13} and \texttt{TC131} in \cref{fig:wirarchdirectory}.
-The \gls{WIR} hardware model requires implementations of the various opcodes and operation formats which reside in files like, e.g., \texttt{tc13opcodes.cc} or \texttt{tc13operationformats.cc}.
-There exist lots more of \gls{ISA}-specific C++ code in order to model, e.g., processor registers or immediate parameters, which are omitted in \cref{fig:wirarchdirectory} for the sake of simplicity.
-System-level configuration files as depicted in \cref{lst:sysConfig} like, e.g., \texttt{tc1796.sys} also reside at this place in the \gls{WIR} directory structure.
 
 \begin{figure}[!t]
   \begin{center}
@@ -135,6 +152,14 @@ System-level configuration files as depicted in \cref{lst:sysConfig} like, e.g.,
   \caption{Detailed Directory Structure of ISA-Specific WIR Parts}
   \label{fig:wirarchdirectory}
 \end{figure}
+
+Due to its importance, \cref{fig:wirarchdirectory} shows the structure of the \texttt{arch} sub-directory in more detail.
+Since the Infineon TriCore \gls{ISA} is the most complete one within \gls{WIR}, this diagram focuses on the \texttt{arch/tricore} directory tree, but the structure for the other \glspl{ISA} available within \gls{WIR} is comparable.
+
+Each \gls{ISA} is implemented via C++ specializations of generic \gls{WIR} classes, comprising, e.g., the inherited classes \texttt{TC13} and \texttt{TC131} in \cref{fig:wirarchdirectory}.
+The \gls{WIR} hardware model requires implementations of the various opcodes and operation formats which reside in files like, e.g., \texttt{tc13opcodes.cc} or \texttt{tc13operationformats.cc}.
+There exist lots more of \gls{ISA}-specific C++ code in order to model, e.g., processor registers or immediate parameters, which are omitted in \cref{fig:wirarchdirectory} for the sake of simplicity.
+System-level configuration files as depicted in \cref{lst:sysConfig} like, e.g., \texttt{tc1796.sys} also reside at this place in the \gls{WIR} directory structure.
 
 As already described in \cref{sec:keyfeatures}, all implementations in the directories \texttt{analyses} and \texttt{optimizations} from \cref{fig:wircodedirectory} are generic and processor-independent.
 Thus, the directories with the very same names, but located underneath the \texttt{arch} tree contain all their processor-specific adaptations.

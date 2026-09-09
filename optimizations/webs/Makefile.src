@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/webs/wirwebs.cc optimizations/webs/wirwebs.h
+
+owebincludedir          = ${includedir}/optimizations/webs
+owebinclude_HEADERS     = optimizations/webs/wirwebs.h

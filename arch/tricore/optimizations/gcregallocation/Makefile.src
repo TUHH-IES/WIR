@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/tricore/optimizations/gcregallocation/tcgraphcoloring.cc arch/tricore/optimizations/gcregallocation/tcgraphcoloring.h
+
+tricoregcraincludedir   = ${includedir}/arch/tricore/optimizations/gcregallocation
+tricoregcrainclude_HEADERS= arch/tricore/optimizations/gcregallocation/tcgraphcoloring.h

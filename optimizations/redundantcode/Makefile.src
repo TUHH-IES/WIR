@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/redundantcode/wirredundantcode.cc optimizations/redundantcode/wirredundantcode.h
+
+orcincludedir           = ${includedir}/optimizations/redundantcode
+orcinclude_HEADERS      = optimizations/redundantcode/wirredundantcode.h

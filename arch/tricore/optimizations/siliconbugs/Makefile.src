@@ -13,3 +13,20 @@ libwir_la_SOURCES      += arch/tricore/optimizations/siliconbugs/tc179x_cpu_tc_1
                           arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_094.cc arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_094.h \
                           arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_095.cc arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_095.h \
                           arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_096.cc arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_096.h
+
+tricoresbincludedir     = ${includedir}/arch/tricore/optimizations/siliconbugs
+tricoresbinclude_HEADERS= arch/tricore/optimizations/siliconbugs/tc179x_cpu_tc_105.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_013.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_048.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_060.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_065.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_069.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_070.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_071.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_072.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_081.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_082.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_083.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_094.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_095.h \
+                          arch/tricore/optimizations/siliconbugs/tc1796_cpu_tc_096.h

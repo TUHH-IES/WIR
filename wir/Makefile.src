@@ -46,3 +46,51 @@ libwir_la_SOURCES      += wir/wir.h \
                           wir/wirtypes.cc wir/wirtypes.h \
                           wir/wirunsignedimmediateparameter.h \
                           wir/wirvirtualregister.cc wir/wirvirtualregister.h
+
+wirincludedir           = ${includedir}/wir
+wirinclude_HEADERS      = wir/wir.h \
+                          wir/wiraddressingmodeparameter.h \
+                          wir/wirbasecontainer.h \
+                          wir/wirbaseimmediateparameter.h \
+                          wir/wirbaseprocessor.h \
+                          wir/wirbaseregister.h \
+                          wir/wirbasicblock.h \
+                          wir/wirbus.h \
+                          wir/wirbusarbitration.h \
+                          wir/wircache.h \
+                          wir/wircompilationunit.h \
+                          wir/wirconditionfieldparameter.h \
+                          wir/wircontainer.h \
+                          wir/wirdata.h \
+                          wir/wirdatainit.h \
+                          wir/wirfpbusarbitration.h \
+                          wir/wirfunction.h \
+                          wir/wirimmediateparameter.h \
+                          wir/wirinstruction.h \
+                          wir/wirio.h \
+                          wir/wirlabelparameter.h \
+                          wir/wirmemoryregion.h \
+                          wir/wirmisc.h \
+                          wir/wiroperation.h \
+                          wir/wiroperationformat.h \
+                          wir/wirparameter.h \
+                          wir/wirpdbusarbitration.h \
+                          wir/wirphysicalregister.h \
+                          wir/wirprocessor.h \
+                          wir/wirregister.h \
+                          wir/wirregisterparameter.h \
+                          wir/wirregistry.h \
+                          wir/wirroundrobinbusarbitration.h \
+                          wir/wirsection.h \
+                          wir/wirsignedimmediateparameter.h \
+                          wir/wirstats.h \
+                          wir/wirstringparameter.h \
+                          wir/wirsymbol.h \
+                          wir/wirsystem.h \
+                          wir/wirsystemcomponent.h \
+                          wir/wirsystemconfig.h \
+                          wir/wirtaskmanager.h \
+                          wir/wirtdmabusarbitration.h \
+                          wir/wirtypes.h \
+                          wir/wirunsignedimmediateparameter.h \
+                          wir/wirvirtualregister.h

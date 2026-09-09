@@ -5,3 +5,12 @@ libwir_la_SOURCES      += arch/tricore/optimizations/scheduling/tcblockschedulin
                           arch/tricore/optimizations/scheduling/tcnoofsuccspriority.cc arch/tricore/optimizations/scheduling/tcnoofsuccspriority.h \
                           arch/tricore/optimizations/scheduling/tcschedulinginfo.cc arch/tricore/optimizations/scheduling/tcschedulinginfo.h \
                           arch/tricore/optimizations/scheduling/tcschedulingpriority.cc arch/tricore/optimizations/scheduling/tcschedulingpriority.h
+
+tricoreschedincludedir  = ${includedir}/arch/tricore/optimizations/scheduling
+tricoreschedinclude_HEADERS= arch/tricore/optimizations/scheduling/tcblockschedulingregion.h \
+                             arch/tricore/optimizations/scheduling/tclocalscheduling.h \
+                             arch/tricore/optimizations/scheduling/tcmaxdelaypriority.h \
+                             arch/tricore/optimizations/scheduling/tcmobilitypriority.h \
+                             arch/tricore/optimizations/scheduling/tcnoofsuccspriority.h \
+                             arch/tricore/optimizations/scheduling/tcschedulinginfo.h \
+                             arch/tricore/optimizations/scheduling/tcschedulingpriority.h

@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/tricore/optimizations/redundantcode/tcredundantcode.cc arch/tricore/optimizations/redundantcode/tcredundantcode.h
+
+tricorercincludedir     = ${includedir}/arch/tricore/optimizations/redundantcode
+tricorercinclude_HEADERS= arch/tricore/optimizations/redundantcode/tcredundantcode.h

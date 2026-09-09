@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += analyses/domination/wirdominationanalysis.cc analyses/domination/wirdominationanalysis.h
+
+adomaincludedir         = ${includedir}/analyses/domination
+adomainclude_HEADERS    = analyses/domination/wirdominationanalysis.h

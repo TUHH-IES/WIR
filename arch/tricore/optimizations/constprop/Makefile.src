@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/tricore/optimizations/constprop/tcconstprop.cc arch/tricore/optimizations/constprop/tcconstprop.h
+
+tricorecpincludedir     = ${includedir}/arch/tricore/optimizations/constprop
+tricorecpinclude_HEADERS= arch/tricore/optimizations/constprop/tcconstprop.h

@@ -9,3 +9,19 @@ libwir_la_SOURCES      += arch/tricore/asmparser/tcasmaddress.cc arch/tricore/as
                           arch/tricore/asmparser/tcasmregisterinitializer.cc arch/tricore/asmparser/tcasmregisterinitializer.h \
                           arch/tricore/asmparser/tcasmtemplateregister.cc arch/tricore/asmparser/tcasmtemplateregister.h \
                           arch/tricore/asmparser/tcasmyacc.cc
+
+tricoreasmpincludedir   = ${includedir}/arch/tricore/asmparser
+tricoreasmpinclude_HEADERS = arch/tricore/asmparser/location.hh \
+                             arch/tricore/asmparser/position.hh \
+                             arch/tricore/asmparser/stack.hh \
+                             arch/tricore/asmparser/tcasmaddress.h \
+                             arch/tricore/asmparser/tcasmargument.h \
+                             arch/tricore/asmparser/tcasmconstant.h \
+                             arch/tricore/asmparser/tcasmcontext.h \
+                             arch/tricore/asmparser/tcasmlabel.h \
+                             arch/tricore/asmparser/tcasmlex.h \
+                             arch/tricore/asmparser/tcasmparser.h \
+                             arch/tricore/asmparser/tcasmregister.h \
+                             arch/tricore/asmparser/tcasmregisterinitializer.h \
+                             arch/tricore/asmparser/tcasmtemplateregister.h \
+                             arch/tricore/asmparser/tcasmyacc.hh

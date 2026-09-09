@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += analyses/immediatedomination/wirimmediatedominationanalysis.cc analyses/immediatedomination/wirimmediatedominationanalysis.h
+
+aidomaincludedir        = ${includedir}/analyses/immediatedomination
+aidomainclude_HEADERS   = analyses/immediatedomination/wirimmediatedominationanalysis.h

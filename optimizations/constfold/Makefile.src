@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/constfold/wirconstfold.cc optimizations/constfold/wirconstfold.h
+
+ocfincludedir           = ${includedir}/optimizations/constfold
+ocfinclude_HEADERS      = optimizations/constfold/wirconstfold.h

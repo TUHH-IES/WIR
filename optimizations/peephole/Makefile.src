@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/peephole/wirpeephole.cc optimizations/peephole/wirpeephole.h
+
+opeepholeincludedir    = ${includedir}/optimizations/peephole
+opeepholeinclude_HEADERS= optimizations/peephole/wirpeephole.h

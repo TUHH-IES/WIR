@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += analyses/liveness/wirlivenessanalysis.cc analyses/liveness/wirlivenessanalysis.h
+
+altaincludedir          = ${includedir}/analyses/liveness
+altainclude_HEADERS     = analyses/liveness/wirlivenessanalysis.h

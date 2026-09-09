@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/deadcode/wirdeadcode.cc optimizations/deadcode/wirdeadcode.h
+
+odceincludedir          = ${includedir}/optimizations/deadcode
+odceinclude_HEADERS     = optimizations/deadcode/wirdeadcode.h

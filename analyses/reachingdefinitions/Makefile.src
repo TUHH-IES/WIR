@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += analyses/reachingdefinitions/wirreachingdefinitionsanalysis.cc analyses/reachingdefinitions/wirreachingdefinitionsanalysis.h
+
+ardefincludedir         = ${includedir}/analyses/reachingdefinitions
+ardefinclude_HEADERS    = analyses/reachingdefinitions/wirreachingdefinitionsanalysis.h

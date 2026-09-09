@@ -34,6 +34,34 @@ libwir_la_SOURCES      += arch/tricore/tc13.cc arch/tricore/tc13.h \
                           arch/tricore/tcpregvirtual.cc arch/tricore/tcpregvirtual.h \
                           arch/tricore/tcpswbitphysical.cc arch/tricore/tcpswbitphysical.h
 
+tricoreincludedir       = ${includedir}/arch/tricore
+tricoreinclude_HEADERS  = arch/tricore/tc13.h \
+                          arch/tricore/tc131.h \
+                          arch/tricore/tcaregphysical.h \
+                          arch/tricore/tcaregvirtual.h \
+                          arch/tricore/tcconst1unsigned.h \
+                          arch/tricore/tcconst2unsigned.h \
+                          arch/tricore/tcconst3unsigned.h \
+                          arch/tricore/tcconst4signed.h \
+                          arch/tricore/tcconst4unsigned.h \
+                          arch/tricore/tcconst5unsigned.h \
+                          arch/tricore/tcconst8unsigned.h \
+                          arch/tricore/tcconst9signed.h \
+                          arch/tricore/tcconst9unsigned.h \
+                          arch/tricore/tcconst10signed.h \
+                          arch/tricore/tcconst10unsigned.h \
+                          arch/tricore/tcconst16signed.h \
+                          arch/tricore/tcconst16unsigned.h \
+                          arch/tricore/tcconst18unsigned.h \
+                          arch/tricore/tcdregphysical.h \
+                          arch/tricore/tcdregvirtual.h \
+                          arch/tricore/tceregphysical.h \
+                          arch/tricore/tceregvirtual.h \
+                          arch/tricore/tcio.h \
+                          arch/tricore/tcpregphysical.h \
+                          arch/tricore/tcpregvirtual.h \
+                          arch/tricore/tcpswbitphysical.h
+
 tricoresysconfdir       = ${sysconfdir}/tricore
 tricoresysconf_DATA     = arch/tricore/tc1796.sys \
                           arch/tricore/tc1797.sys \

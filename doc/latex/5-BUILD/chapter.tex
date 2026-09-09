@@ -23,6 +23,11 @@ libtool: link: ( cd ".libs" && rm -f "libwir.la" && ln -s "../libwir.la" "libwir
 make[2]: Leaving directory '/tmp/WIR/BUILD'
 Making all in doc
 make[2]: Entering directory '/tmp/WIR/BUILD/doc'
+make[3]: Entering directory '/tmp/WIR/BUILD/doc'
+Making all in latex
+make[4]: Entering directory '/tmp/WIR/BUILD/doc/latex'
+make[4]: Leaving directory '/tmp/WIR/BUILD/doc/latex'
+make[3]: Leaving directory '/tmp/WIR/BUILD/doc'
 make[2]: Leaving directory '/tmp/WIR/BUILD/doc'
 make[1]: Leaving directory '/tmp/WIR/BUILD'
 \end{lstlisting}
@@ -45,7 +50,7 @@ The \texttt{include} directory tree contains all C++ header files of \gls{WIR}, 
 The built binary libraries \texttt{libuseful.so} and \texttt{libwir.so} (and/or their static counterparts if configured accordingly) reside in sub-directory \texttt{lib} after installation.
 Finally, sub-directory \texttt{share} contains the authors, license and version information of the software package.
 
-\begin{lstlisting}[style=commandline,float=t,caption={WIR Unit Tests},label=lst:tests]
+\begin{lstlisting}[style=commandline,float=!t,caption={WIR Unit Tests},label=lst:tests]
 @/tmp/WIR/BUILD@> make -j 8 checkÜ\label{lst:testsmake}Ü
 Making check in LIBUSEFUL
 [...]
@@ -58,7 +63,7 @@ make[1]: Entering directory '/tmp/WIR/BUILD/tests'
 ^PASS^: tcOperations2.sh
 ^PASS^: tcBasicBlock1.sh
 ^============================================================================^
-^Testsuite summary for wir 2.0^
+^Testsuite summary for wir 3.0^
 ^============================================================================^
 ~~# TOTAL: 126~~
 ^# PASS:  89^
@@ -68,10 +73,31 @@ make[1]: Entering directory '/tmp/WIR/BUILD/tests'
 ~~# XPASS: 0~~
 ~~# ERROR: 0~~
 ^============================================================================^
-make[5]: Leaving directory '/tmp/WIR/BUILD/arÜÜch/tricore/tests'
+make[5]: Leaving directory '/tmp/WIR/BUILD/arch/tricore/tests'
 make[2]: Leaving directory '/tmp/WIR/BUILD/arÜÜch/tricore'
 make[1]: Leaving directory '/tmp/WIR/BUILD/arÜÜch'
 make[1]: Leaving directory '/tmp/WIR/BUILD'
+\end{lstlisting}
+
+\begin{lstlisting}[style=code,float=!b,caption={Simple WIR Test Program \texttt{wirtest.cc}},label=lst:testprogram]
+// Include WIR headers.
+^#include^ §<wir/wir.h>§Ü\label{lst:testprograminclude}Ü
+
+using namespace WIR;Ü\label{lst:testprogramnamespace}Ü
+
+@int@ main@( void )@
+{
+  // Initialize WIR.
+  WIR_Init@()@;Ü\label{lst:testprograminit}Ü
+
+  // Create test WIR system.
+  WIR_TaskManager t;
+  WIR_System sys@(@ "genericmips.sys", t @)@;Ü\label{lst:testprogramsys}Ü
+
+  sys.setName@(@ "Test WIR system" @)@;
+
+  return@(@ §0§ @)@;
+}
 \end{lstlisting}
 
 \begin{figure}[!ht]
@@ -135,26 +161,5 @@ The test program can finally be compiled and linked against the installed \gls{W
 
 Setting the variable \texttt{LD\_LIBRARY\_PATH} as shown in \cref{lst:usewir1} above (again assuming a Bourne-compatible shell) is required so that the host system's dynamic linker is able to find the installed binary libraries.
 \cref{lst:usewir2} afterwards invokes the \texttt{g++} compiler with the proper include and library arguments.
-
-\begin{lstlisting}[style=code,float=b,caption={Simple WIR Test Program \texttt{wirtest.cc}},label=lst:testprogram]
-// Include WIR headers.
-^#include^ §<wir/wir.h>§Ü\label{lst:testprograminclude}Ü
-
-using namespace WIR;Ü\label{lst:testprogramnamespace}Ü
-
-@int@ main@( void )@
-{
-  // Initialize WIR.
-  WIR_Init@()@;Ü\label{lst:testprograminit}Ü
-
-  // Create test WIR system.
-  WIR_TaskManager t;
-  WIR_System sys@(@ "genericmips.sys", t @)@;Ü\label{lst:testprogramsys}Ü
-
-  sys.setName@(@ "Test WIR system" @)@;
-
-  return@(@ §0§ @)@;
-}
-\end{lstlisting}
 
 \cleardoubleoddpage

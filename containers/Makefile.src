@@ -14,3 +14,21 @@ libwir_la_SOURCES      += containers/wiravailabledefinitions.cc containers/wirav
                           containers/wirreachability.cc containers/wirreachability.h \
                           containers/wirreachingdefinitions.cc containers/wirreachingdefinitions.h \
                           containers/wirschedulingconstraint.cc containers/wirschedulingconstraint.h
+
+contincludedir          = ${includedir}/containers
+continclude_HEADERS     = containers/wiravailabledefinitions.h \
+                          containers/wirbitvalues.h \
+                          containers/wirbreak.h \
+                          containers/wircomment.h \
+                          containers/wircontroltree.h \
+                          containers/wirdataaccess.h \
+                          containers/wirdomination.h \
+                          containers/wirduudchain.h \
+                          containers/wirfileinfo.h \
+                          containers/wirflowfactref.h \
+                          containers/wirimmediatedomination.h \
+                          containers/wirliveout.h \
+                          containers/wirloopexit.h \
+                          containers/wirreachability.h \
+                          containers/wirreachingdefinitions.h \
+                          containers/wirschedulingconstraint.h

@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += optimizations/redundantblocks/wirredundantblocks.cc optimizations/redundantblocks/wirredundantblocks.h
+
+orblincludedir          = ${includedir}/optimizations/redundantblocks
+orblinclude_HEADERS     = optimizations/redundantblocks/wirredundantblocks.h

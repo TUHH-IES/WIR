@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += arch/riscv/optimizations/constfold/rvconstfold.cc arch/riscv/optimizations/constfold/rvconstfold.h
+
+riscvcfincludedir       = ${includedir}/arch/riscv/optimizations/constfold
+riscvcfinclude_HEADERS  = arch/riscv/optimizations/constfold/rvconstfold.h

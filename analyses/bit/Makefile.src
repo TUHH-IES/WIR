@@ -5,3 +5,12 @@ libwir_la_SOURCES      += analyses/bit/wirbitdfa.cc analyses/bit/wirbitdfa.h \
                           analyses/bit/wirl4.cc analyses/bit/wirl4.h \
                           analyses/bit/wirlocation.cc analyses/bit/wirlocation.h \
                           analyses/bit/wirupdownvalue.cc analyses/bit/wirupdownvalue.h
+
+abitincludedir          = ${includedir}/analyses/bit
+abitinclude_HEADERS     = analyses/bit/wirbitdfa.h \
+                          analyses/bit/wirdfg.h \
+                          analyses/bit/wirdfgedgeproperty.h \
+                          analyses/bit/wirdfgnodeproperty.h \
+                          analyses/bit/wirl4.h \
+                          analyses/bit/wirlocation.h \
+                          analyses/bit/wirupdownvalue.h

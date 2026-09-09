@@ -1,1 +1,4 @@
 libwir_la_SOURCES      += analyses/reachability/wirreachabilityanalysis.cc analyses/reachability/wirreachabilityanalysis.h
+
+areachincludedir        = ${includedir}/analyses/reachability
+areachinclude_HEADERS   = analyses/reachability/wirreachabilityanalysis.h
