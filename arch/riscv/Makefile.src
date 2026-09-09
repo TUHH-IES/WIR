@@ -26,14 +26,19 @@ libwir_la_SOURCES      += arch/riscv/rv32i.cc arch/riscv/rv32i.h \
                           arch/riscv/rvconst5unsigned.cc arch/riscv/rvconst5unsigned.h \
                           arch/riscv/rvconst6signed.cc arch/riscv/rvconst6signed.h \
                           arch/riscv/rvconst6unsigned.cc arch/riscv/rvconst6unsigned.h \
+                          arch/riscv/rvconst7unsigned.cc arch/riscv/rvconst7unsigned.h \
                           arch/riscv/rvconst8unsigned.cc arch/riscv/rvconst8unsigned.h \
+                          arch/riscv/rvconst10signed.cc arch/riscv/rvconst10signed.h \
+                          arch/riscv/rvconst10unsigned.cc arch/riscv/rvconst10unsigned.h \
                           arch/riscv/rvconst12signed.cc arch/riscv/rvconst12signed.h \
                           arch/riscv/rvconst20unsigned.cc arch/riscv/rvconst20unsigned.h \
+                          arch/riscv/rvnzconst20unsigned.cc arch/riscv/rvnzconst20unsigned.h \
                           arch/riscv/rvio.cc arch/riscv/rvio.h \
                           arch/riscv/rveregphysical.cc arch/riscv/rveregphysical.h \
                           arch/riscv/rveregvirtual.cc arch/riscv/rveregvirtual.h \
                           arch/riscv/rvfregphysical.cc arch/riscv/rvfregphysical.h \
                           arch/riscv/rvfregvirtual.cc arch/riscv/rvfregvirtual.h \
+                          arch/riscv/rvqregvirtual.cc arch/riscv/rvqregvirtual.h \
                           arch/riscv/rvregphysical.cc arch/riscv/rvregphysical.h \
                           arch/riscv/rvregvirtual.cc arch/riscv/rvregvirtual.h
 
@@ -54,13 +59,17 @@ riscvinclude_HEADERS    = arch/riscv/rv32i.h \
                           arch/riscv/rvconst6signed.h \
                           arch/riscv/rvconst6unsigned.h \
                           arch/riscv/rvconst8unsigned.h \
+                          arch/riscv/rvconst10signed.h \
+                          arch/riscv/rvconst10unsigned.h \
                           arch/riscv/rvconst12signed.h \
                           arch/riscv/rvconst20unsigned.h \
+                          arch/riscv/rvnzconst20unsigned.h \
                           arch/riscv/rvio.h \
                           arch/riscv/rveregphysical.h \
                           arch/riscv/rveregvirtual.h \
                           arch/riscv/rvfregphysical.h \
                           arch/riscv/rvfregvirtual.h \
+                          arch/riscv/rvqregvirtual.h \
                           arch/riscv/rvregphysical.h \
                           arch/riscv/rvregvirtual.h
 
