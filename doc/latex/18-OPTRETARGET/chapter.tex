@@ -141,6 +141,9 @@ include arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Makefile.src
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/Makefile.src} with the following contents: \\
 \begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Ü{\itshape newModel}Ügraphcoloring.cc arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Ü{\itshape newModel}Ügraphcoloring.h
+
+Ü{\itshape archDir}Ügcraincludedir      = ${includedir}/arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation
+Ü{\itshape archDir}Ügcrainclude_HEADERS = arch/Ü{\itshape archDir}Ü/optimizations/gcregallocation/Ü{\itshape newModel}Ügraphcoloring.h
 \end{lstlisting}
 
   \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/gcregallocation/{\itshape newModel}graphcoloring.h} according to the general structure depicted in \cref{lst:newprocgcraheader}.
@@ -1015,6 +1018,9 @@ If this data flow analysis is available, the steps to set up the infrastructure 
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/deadcode/Makefile.src} with the following contents: \\
 \begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/deadcode/Ü{\itshape newModel}Üdeadcode.cc arch/Ü{\itshape archDir}Ü/optimizations/deadcode/Ü{\itshape newModel}Üdeadcode.h
+
+Ü{\itshape archDir}Üdceincludedir       = ${includedir}/arch/Ü{\itshape archDir}Ü/optimizations/deadcode
+Ü{\itshape archDir}Üdceinclude_HEADERS  = arch/Ü{\itshape archDir}Ü/optimizations/deadcode/Ü{\itshape newModel}Üdeadcode.h
 \end{lstlisting}
 
   \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/deadcode/{\itshape newModel}deadcode.h} according to the general structure depicted in \cref{lst:newprocdceheader}.
@@ -1066,7 +1072,7 @@ class Ü{\itshape newModel}Ü_DeadCode : public WIR_DeadCodeÜ\label{lst:newproc
 What is missing in \cref{lst:newprocdceimpl} is the implementation of the overridden method \texttt{runOptimization} from \cref{lst:newprocdceheader6} of \cref{lst:newprocdceheader}.
 The task of this method is to create an instance of the new processor's bit-true data flow analysis and to have it used during the actual dead code elimination.
 This boils down to the following few lines of code: \\
-\begin{lstlisting}[style=code,float=!ht]
+\begin{lstlisting}[style=code,float=!ht,belowskip=-0.8 \baselineskip]
 @void@ Ü{\itshape newModel}Ü_DeadCode::runOptimization@(@ WIR_Function æ&æf @)@
 {
   Ü{\itshape newModel}Ü_BitDFA analyzer { f };
@@ -1183,7 +1189,7 @@ The constant propagation pass of \gls{WIR} aims to replace operations that get c
 Similar to constant folding from \cref{sec:optcfoldretarget}, this optimization makes use of the bit-true data flow analysis, and the steps to retarget constant propagation to a new architecture are the same as described in \cref{sec:optdceretarget}.\footnote{Constant propagation uses directory name \texttt{constprop}, file names \texttt{{\itshape newModel}constprop.h} and \texttt{{\itshape newModel}constprop.cc}, and class name \texttt{{\itshape newModel}\_ConstProp}.}
 
 A retargeted constant propagation has to override the purely virtual method \texttt{doConstProp} as follows: \\
-\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip]
+\begin{lstlisting}[style=code,float=!ht,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 virtual @bool@ doConstProp@(@ const WIR_Operation æ&æo,
                           const ästd::mapäæ<æWIR_id_t, WIR_UpDownValueæ> &æinValue @)@ override;
 \end{lstlisting}
@@ -1244,6 +1250,15 @@ If, e.g., the format of the operation featuring \texttt{use} mandates that \text
 \label{sec:optjumpsretarget}
 %-------------------------------------------------------------------------
 
+Retargeting the \gls{WIR} jump correction to a new processor architecture can be quite laborious.
+The general steps, however, are very simple and similar to those already elaborated in the previous sections of this chapter:
+\begin{enumerate}
+  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection}.
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/jumpcorrection/Makefile.src| \\
+  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
+
 \begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Jump Correction},label=lst:newprocjcheader]
 ^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_JUMPCORRECTION_H
 #define _Ü{\itshape\color{darkgreen}newModel}Ü_JUMPCORRECTION_H^
@@ -1284,15 +1299,6 @@ class Ü{\itshape newModel}Ü_JumpCorrection : public WIR_JumpCorrectionÜ\label
 ^#endif^
 \end{lstlisting}
 
-Retargeting the \gls{WIR} jump correction to a new processor architecture can be quite laborious.
-The general steps, however, are very simple and similar to those already elaborated in the previous sections of this chapter:
-\begin{enumerate}
-  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection}.
-
-  \item Add a new line \\
-  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/jumpcorrection/Makefile.src| \\
-  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
-
 \begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Jump Correction},label=lst:newprocjcimpl]
 ^ifdef HAVE_CONFIG_H^
 ^#include^ §<config_wir.h>§
@@ -1323,6 +1329,9 @@ namespace WIR {
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection/Makefile.src} with the following contents: \\
 \begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/jumpcorrection/Ü{\itshape newModel}Üjumpcorrection.cc arch/Ü{\itshape archDir}Ü/optimizations/jumpcorrection/Ü{\itshape newModel}Üjumpcorrection.h
+
+Ü{\itshape archDir}Üjcincludedir        = ${includedir}/arch/Ü{\itshape archDir}Ü/optimizations/jumpcorrection
+Ü{\itshape archDir}Üjcinclude_HEADERS   = arch/Ü{\itshape archDir}Ü/optimizations/jumpcorrection/Ü{\itshape newModel}Üjumpcorrection.h
 \end{lstlisting}
 
   \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/jumpcorrection/{\itshape newModel}jumpcorrection.h} according to the general structure depicted in \cref{lst:newprocjcheader}.
@@ -1528,6 +1537,9 @@ namespace WIR {
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/operationbitwidths/Makefile.src} with the following contents: \\
 \begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/operationbitwidths/Ü{\itshape newModel}Üoperationbitwidths.cc arch/Ü{\itshape archDir}Ü/optimizations/operationbitwidths/Ü{\itshape newModel}Üoperationbitwidths.h
+
+Ü{\itshape archDir}Üobwincludedir       = ${includedir}/arch/Ü{\itshape archDir}Ü/optimizations/operationbitwidths
+Ü{\itshape archDir}Üobwinclude_HEADERS  = arch/Ü{\itshape archDir}Ü/optimizations/operationbitwidths/Ü{\itshape newModel}Üoperationbitwidths.h
 \end{lstlisting}
 
   \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/operationbitwidths/{\itshape newModel}operationbit-\linebreak widths.h} according to the general structure depicted in \cref{lst:newprocobwheader}.
@@ -1649,6 +1661,53 @@ This most importantly includes the specification of the peephole's size(s) by ca
 The \gls{WIR} peephole optimizer supports peepholes with different sizes so that \texttt{addPeepholeSize} can be called several times by the constructor.
 Furthermore, the new optimizer's constructor can specify whether the formed peepholes shall span over several \gls{WIR} basic blocks or not by calling method \texttt{setCrossBasicBlocks} from \cref{lst:wiroptpeep6} of \cref{lst:wiroptpeep}.
 
+The detection of some specific code pattern(s) inside a given peephole is done by method \texttt{matchPeephole} (cf. \cref{lst:newprocpeepheader3}).
+As discussed in \cref{sec:optpeep}, the peephole optimizer moves a sliding window over the \gls{WIR} instructions inside basic blocks.
+Thus, the instructions within a peephole are represented by iterators referring to their positions within their enclosing basic blocks.
+A \texttt{std::vector} of such iterators thus represents a peephole, and a reference to such a peephole is handed over to \texttt{matchPeephole}.
+This method then inspects the peephole's instructions and operations, checks whether they match some particular code pattern, and returns whether a pattern was identified successfully or not.
+
+In the former case, method \texttt{transformPeephole} (cf. \cref{lst:newprocpeepheader4}) is invoked next.
+It gets a successfully matched peephole as argument and optimizes it by transforming the peephole's code locally.
+
+
+%-------------------------------------------------------------------------
+\section{Local Instruction Scheduling}
+\label{sec:optschedretarget}
+%-------------------------------------------------------------------------
+
+Retargeting the local instruction scheduler of \gls{WIR} requires to specialize various abstract base classes, i.e., \texttt{WIR\_LocalScheduling}, \texttt{WIR\_BlockSchedulingRegion} and the scheduling priorities represented by classes \texttt{WIR\_MaxDelayPriority}, \texttt{WIR\_MobilityPriority} and \texttt{WIR\_NoOfSuccsPriority}.
+For this purpose, the following steps need to be done:
+\begin{enumerate}
+  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling}.
+
+  \item Add a new line \\
+  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/scheduling/Makefile.src| \\
+  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
+
+  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/Makefile.src} with the following contents: \\
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.cc \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.h
+
+Ü{\itshape archDir}Üschedincludedir     = ${includedir}/arch/Ü{\itshape archDir}Ü/optimizations/scheduling
+Ü{\itshape archDir}Üschedinclude_HEADERS= arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.h \
+                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.h
+\end{lstlisting}
+
+  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}localscheduling.h} following the general structure depicted in \cref{lst:newprocschedheader}.
+
 \begin{lstlisting}[style=code,float=!t,caption={Header File for a New Processor Model's Local Instruction Scheduler},label=lst:newprocschedheader]
 ^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_LOCALSCHEDULING_H
 #define _Ü{\itshape\color{darkgreen}newModel}Ü_LOCALSCHEDULING_H^
@@ -1692,51 +1751,11 @@ class Ü{\itshape newModel}Ü_LocalScheduling : public WIR_LocalSchedulingÜ\lab
 ^#endif^
 \end{lstlisting}
 
-Detecting specific code pattern(s) in a given peephole is done by method \texttt{matchPeephole} (cf. \cref{lst:newprocpeepheader3}).
-As discussed in \cref{sec:optpeep}, a sliding window is moved over the \gls{WIR} instructions inside basic blocks.
-Thus, the instructions within a peephole are represented by iterators referring to their positions within their enclosing basic blocks.
-A \texttt{std::vector} of such iterators thus represents a peephole, and a reference to such a peephole is handed over to \texttt{matchPeephole}.
-It then inspects the peephole's instructions and operations, checks whether they match some particular code pattern, and returns whether a pattern was identified successfully or not.
-
-In the former case, method \texttt{transformPeephole} (cf. \cref{lst:newprocpeepheader4}) is invoked next.
-It gets a successfully matched peephole as argument and optimizes it by transforming the peephole's code locally.
-
-
-%-------------------------------------------------------------------------
-\section{Local Instruction Scheduling}
-\label{sec:optschedretarget}
-%-------------------------------------------------------------------------
-
-Retargeting the local instruction scheduler of \gls{WIR} requires to specialize various abstract base classes, i.e., \texttt{WIR\_LocalScheduling}, \texttt{WIR\_BlockSchedulingRegion} and a couple of scheduling priorities.
-For this purpose, the following steps need to be done:
-\begin{enumerate}
-  \item Create a new directory \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling}.
-
-  \item Add a new line \\
-  \verb|  include arch/|\texttt{\itshape archDir}\verb|/optimizations/scheduling/Makefile.src| \\
-  to file \texttt{WIR/arch/{\itshape archDir}/optimizations/Makefile.src}.
-
-  \item Create a new file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/Makefile.src} as follows: \\
-\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
-libwir_la_SOURCES         += arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.cc \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Üblockschedulingregion.h \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.cc \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ülocalscheduling.h \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.cc \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümaxdelaypriority.h \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.cc \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ümobilitypriority.h \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.cc \
-                             arch/Ü{\itshape archDir}Ü/optimizations/scheduling/Ü{\itshape newModel}Ünoofsuccspriority.h
-\end{lstlisting}
-
-  \item Create a file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}localscheduling.h} following the general structure depicted in \cref{lst:newprocschedheader}.
-
 \end{enumerate}
 
 The constructors from lines \crefrange{lst:newprocschedheader2}{lst:newprocschedheader4} are straightforward, as they only need to delegate their arguments to the constructors of base class \texttt{WIR\_LocalScheduling} from \cref{lst:wiroptsched}.
 \texttt{generateBlockRegion} (cf. \cref{lst:newprocschedheader6} of \cref{lst:newprocschedheader}) creates a new scheduling region for a given basic block \texttt{b} and builds its dependence graph: \\
-\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
+\begin{lstlisting}[style=code,float=!h,belowskip=-0.8 \baselineskip]
 WIR_BlockSchedulingRegion æ*æÜ{\itshape newModel}Ü_LocalScheduling::generateBlockRegion@(@ WIR_BasicBlock æ&æb @)@ const
 {
   auto æ*æres = new Ü{\itshape newModel}Ü_BlockSchedulingRegion@(@ b, mVerbosity, mKeepTmpFiles @)@;
@@ -1823,6 +1842,34 @@ The purpose of this method is to distinguish between, e.g., fast integer operati
 Method \texttt{getStartCycle} considers the special scenario that a given operation shall be scheduled as first operation inside a basic block.
 Then, potential dependencies between the last operations of preceding basic blocks need to be taken into account and possible stall cycles have to be determined.
 
+As discussed in \cref{sec:optsched}, processor-specific realizations of heuristics to determine scheduling priorities are required next.
+For the maximum delays priority, this involves:
+\begin{enumerate}[resume]
+    \item Create file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}maxdelaypriority.h} following the general structure shown in \cref{lst:newmaxdelayheader}.\label{enum:maxdelay}
+\end{enumerate}
+
+The constructors from \cref{lst:newmaxdelayheader2,lst:newmaxdelayheader3} are straightforward, they simply have to invoke the respective constructors of base class \texttt{WIR\_MaxDelayPriority}.
+In analogy to \cref{lst:newprocimpl15} of \cref{lst:newprocimpl}, the \texttt{clone} method simply needs to call the copy constructor of the new class: \\
+\begin{lstlisting}[style=code,float=!h,belowskip=-0.8 \baselineskip]
+WIR_SchedulingPriority æ*æÜ{\itshape newModel}Ü_MaxDelayPriority::clone@( void )@ const
+{
+  return@(@ new Ü{\itshape newModel}Ü_MaxDelayPriority@(@ æ*æthis @) )@;
+};
+\end{lstlisting}
+
+The implementation of method \texttt{computePriority} (\cref{lst:newmaxdelayheader5}) is the essential part of a scheduling priority.
+It receives a reference to a \gls{WIR} operation \texttt{o} as first argument, for which the scheduling priority shall be computed.
+The second argument \texttt{pred} points to another operation that has already been scheduled in the current execution cycle and that is predecessor of \texttt{o}.
+If no such preceding operation exists, \texttt{pred} can be the \texttt{nullptr}.
+Finally, argument \texttt{cycle} represents the current execution cycle to be considered.
+The result returned by \texttt{computePriority} is a tuple whose first element stores the determined scheduling priority for operation \texttt{o}.
+The tuple's second element is a list of operation pointers denoting all \gls{WIR} operations to be scheduled together with \texttt{o} in the current execution cycle.
+Regularly, a processor-specific implementation of \texttt{computePriority} starts with determining \texttt{o}'s initial priority using method \texttt{computePriority} of the scheduling priority's base class.
+Hereafter, processor-specific checks can be carried out to refine this initial priority.
+Such checks can take into account the particular type of \texttt{o}, on which hardware units it gets executed, how it interacts within a processor's pipeline with the preceding operation \texttt{pred}, etc.
+
+Depending on which internal data structures are required inside a new priority's class and method \texttt{computePrio\-rity}, the destructor from \cref{lst:newmaxdelayheader4} finally requires some specific implementation.
+
 \begin{lstlisting}[style=code,float=t,caption={Header File for a New Processor Model's Maximum Delay Scheduling Priority},label=lst:newmaxdelayheader]
 ^#ifndef _Ü{\itshape\color{darkgreen}newModel}Ü_MAXDELAYPRIORITY_H
 #define _Ü{\itshape\color{darkgreen}newModel}Ü_MAXDELAYPRIORITY_H^
@@ -1858,34 +1905,6 @@ class Ü{\itshape newModel}Ü_MaxDelayPriority : public WIR_MaxDelayPriorityÜ\l
 
 ^#endif^
 \end{lstlisting}
-
-As discussed in \cref{sec:optsched}, processor-specific realizations of heuristics to determine scheduling priorities are required next.
-For the maximum delays priority, this involves:
-\begin{enumerate}[resume]
-    \item Create file \texttt{WIR/arch/{\itshape archDir}/optimizations/scheduling/{\itshape newModel}maxdelaypriority.h} following the general structure shown in \cref{lst:newmaxdelayheader}.\label{enum:maxdelay}
-\end{enumerate}
-
-The constructors from \cref{lst:newmaxdelayheader2,lst:newmaxdelayheader3} are straightforward, they simply have to invoke the respective constructors of base class \texttt{WIR\_MaxDelayPriority}.
-In analogy to \cref{lst:newprocimpl15} of \cref{lst:newprocimpl}, the \texttt{clone} method simply needs to call the copy constructor of the new class: \\
-\begin{lstlisting}[style=code,float=!h,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
-WIR_SchedulingPriority æ*æÜ{\itshape newModel}Ü_MaxDelayPriority::clone@( void )@ const
-{
-  return@(@ new Ü{\itshape newModel}Ü_MaxDelayPriority@(@ æ*æthis @) )@;
-};
-\end{lstlisting}
-
-The implementation of method \texttt{computePriority} (\cref{lst:newmaxdelayheader5}) is the essential part of a scheduling priority.
-It receives a reference to a \gls{WIR} operation \texttt{o} as first argument, for which the scheduling priority shall be computed.
-The second argument \texttt{pred} points to another operation that has already been scheduled in the current execution cycle and that is predecessor of \texttt{o}.
-If no such preceding operation exists, \texttt{pred} can be the \texttt{nullptr}.
-Finally, argument \texttt{cycle} represents the current execution cycle to be considered.
-The result returned by \texttt{computePriority} is a tuple whose first element stores the determined scheduling priority for operation \texttt{o}.
-The tuple's second element is a list of operation pointers denoting all \gls{WIR} operations to be scheduled together with \texttt{o} in the current execution cycle.
-Regularly, a processor-specific implementation of \texttt{computePriority} starts with determining \texttt{o}'s initial priority using method \texttt{computePriority} of the scheduling priority's base class.
-Hereafter, processor-specific checks can be carried out to refine this initial priority.
-Such checks can take into account the particular type of \texttt{o}, on which hardware units it gets executed, how it interacts within a processor's pipeline with the preceding operation \texttt{pred}, etc.
-
-Depending on which internal data structures are required inside a new priority's class and method \texttt{computePrio\-rity}, the destructor from \cref{lst:newmaxdelayheader4} finally requires some specific implementation.
 
 \begin{enumerate}[resume]
     \item Repeat \cref{enum:maxdelay} for the remaining scheduling priorities mobility and number of successors.

@@ -47,6 +47,9 @@ EXTRA_DIST             =
 \begin{lstlisting}[style=code,float=h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
 libwir_la_SOURCES     +=
 
+Ü{\itshape archDir}Üincludedir      = ${includedir}/arch/Ü{\itshape archDir}Ü
+Ü{\itshape archDir}Üinclude_HEADERS =
+
 Ü{\itshape archDir}Üsysconfdir      = ${sysconfdir}/Ü{\itshape archDir}Ü
 Ü{\itshape archDir}Üsysconf_DATA    =
 \end{lstlisting}
@@ -130,6 +133,9 @@ Let \texttt{\itshape newModel} be a speaking name for the actual \gls{ISA} to be
   \item Add \\
   \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|.h| \\
   to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+  Furthermore, add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|.h| \\
+  to the \texttt{{\itshape archDir}include\_HEADERS} directive of the very same Makefile.
 \end{enumerate}
 
 \begin{lstlisting}[style=code,float=!t,caption={Rudimentary Implementation of a New Processor Model's Class},label=lst:newprocimpl]
@@ -202,9 +208,6 @@ This requires the following steps:
   It is important to register the new processor model as shown in \cref{lst:newinit5} because without this, \gls{WIR} will fail to create actual systems using the new model from system configuration files.
 
   The interested reader is strongly encouraged to directly put the comments from \crefrange{lst:newinit2}{lst:newinit4} and \cref{lst:newinit6} in the code, since they provide a required internal structure to the \texttt{init} method that will be filled with contents in the upcoming sections of this document.
-
-  \clearpage
-  \newpage
 
   \begin{wirWarn}
     It has to be ensured that the registration of the processor model shown in \cref{lst:newinit5} of \cref{lst:newinit} always comes after all other registrations of I/O functions (cf. \cref{sec:newio}), operation formats and opcode mappings (cf. \cref{sec:newisa}), and before the initialization of any other processor models derived from the current class.
@@ -399,8 +402,6 @@ class Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV final : public WIR_Virtual
 
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModelregType}virtual.cc} implementing this new virtual register according to \cref{lst:newvregimpl}.
 
-  \newpage
-
   If the newly created register class models hierarchical registers (cf. \cref{sssec:regs}), the default constructor from \cref{lst:newvregimpl1} needs to create and push back the required number of virtual child registers of the appropriate sub-register class:
 \begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
 // Default constructor.
@@ -415,6 +416,9 @@ class Ü{\itshape newModel}Ü_Ü{\itshape regType}ÜV final : public WIR_Virtual
   \item Add \\
   \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|virtual.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|virtual.h| \\
   to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+  Furthermore, add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|virtual.h| \\
+  to the \texttt{{\itshape archDir}include\_HEADERS} directive of the very same Makefile.
 \end{enumerate}
 
 \begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Virtual Register's Class},label=lst:newvregimpl]
@@ -582,6 +586,9 @@ namespace WIR {
   \item Add \\
   \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|physical.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|physical.h| \\
   to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+  Furthermore, add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModelregType}\verb|physical.h| \\
+  to the \texttt{{\itshape archDir}include\_HEADERS} directive of the very same Makefile.
 \end{enumerate}
 
 As soon as all classes for physical registers of all required types have been implemented this way, the processor model from \cref{sec:newprocinit} needs to be extended by all the hardware registers of the new architecture.
@@ -780,6 +787,9 @@ namespace WIR {
   \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|const|\texttt{\itshape bitWidth}\verb|signed.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|const|\texttt{\itshape bitWidth}-\\
   \verb|  signed.h| \\
   to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+  Furthermore, add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|const|\texttt{\itshape bitWidth}\verb|signed.h| \\
+  to the \texttt{{\itshape archDir}include\_HEADERS} directive of the very same Makefile.
 
   \item For each identified unsigned immediate parameter, perform \crefrange{enum:newsimmhead}{enum:newsimmmake} analogously, but based on the code shown in \cref{lst:newusimmheader,lst:newusimmimpl}.
   The constructor realized in \cref{lst:newusimmimpl1} of \cref{lst:newusimmimpl} assumes a value range from 0 to 2$^{\texttt{\itshape bitWidth}-1}$ for unsigned values \texttt{v} used to construct an unsigned immediate.
@@ -823,18 +833,6 @@ class Ü{\itshape newModel}Ü_ConstÜ{\itshape bitWidth}Ü_Unsigned final : publ
 
 ^#endif^
 \end{lstlisting}
-
-  \item If required by the architecture's \gls{ISA}, additional constraints on the value range accepted by the constructors can be added by extending the body of the constructor from \cref{lst:newusimmimpl2} of \cref{lst:newusimmimpl} with specific assertions.\label{enum:immconstr}
-  For example, \glspl{ISA} sometimes require that certain immediates used for particular machine operations have to be non-zero, or that immediates need to be multiples of 4.
-  Such behavior can be enforced as follows:
-\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
-{
-  // Body of an immediate's default constructor.
-  ufAssert( v != §0§ );
-  ufAssert( v % §4§ == §0§ );
-}
-\end{lstlisting}
-\end{enumerate}
 
 \begin{lstlisting}[style=code,float=!t,caption={Implementation of a New Unsigned Immediate Parameter's Class},label=lst:newusimmimpl]
 ^ifdef HAVE_CONFIG_H^
@@ -880,6 +878,19 @@ namespace WIR {
 }       // namespace WIR
 \end{lstlisting}
 
+  \item If required by the architecture's \gls{ISA}, additional constraints on the value range accepted by the constructors can be added by extending the body of the constructor from \cref{lst:newusimmimpl2} of \cref{lst:newusimmimpl} with specific assertions.\label{enum:immconstr}
+  For example, \glspl{ISA} sometimes require that certain immediates used for particular machine operations have to be non-zero, or that immediates need to be multiples of 4.
+  Such behavior can be enforced as follows:
+\begin{lstlisting}[style=code,float=!ht,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+{
+  // Body of an immediate's default constructor.
+  ufAssert( v != §0§ );
+  ufAssert( v % §4§ == §0§ );
+}
+\end{lstlisting}
+\end{enumerate}
+
+\clearpage
 As motivated in \cref{chap:codegen}, \gls{WIR} is designed to model assembly code with the purpose to generate actual code for further processing by subsequent assembler tools.
 However, \gls{ISA} specifications that serve as the basis for the modelling of immediate parameters regularly refer to an architecture's binary executable interface, and not to some assembly-level interface.
 This can sometimes lead to the situation that an assembler for some architecture accepts different immediate parameters for some machine operation as originally specified by the \gls{ISA}.
@@ -1066,7 +1077,7 @@ For this purpose, a common naming scheme should be defined that will then be use
   \item Edit file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.h} and extend the new class by a novel, public class \texttt{Operation\-Format} that inherits from \texttt{{\itshape baseClass}::OperationFormat} (cf. \cref{lst:newopformats}). \label{enum:newopformat}
   For all identified formats that shall be modeled within \gls{WIR} for the new architecture, add a new member declaration to class \texttt{Operation\-Format} as shown in \cref{lst:newopformats2,lst:newopformats3}.
 
-\begin{lstlisting}[style=code,float=!b,caption={Declaration of a New Processor Model's Operation Formats},label=lst:newopformats]
+\begin{lstlisting}[style=code,float=t,caption={Declaration of a New Processor Model's Operation Formats},label=lst:newopformats]
 class Ü{\itshape newModel}Ü : public Ü{\itshape baseClass}Ü
 {
   public:
@@ -1103,7 +1114,7 @@ class Ü{\itshape newModel}Ü : public Ü{\itshape baseClass}Ü
   \item Next, the structure of all implemented operation formats needs to be registered, i.e., their number of parameters and the different kinds of parameters in their specific order according to the new architecture's \gls{ISA}.
   For this purpose, the new model's \texttt{init} method from \cref{lst:newinit} needs to be extended by calls of the global \gls{WIR} registry in analogy to \cref{lst:tcopfreg}.
 
-\begin{lstlisting}[style=code,float=t,caption={Implementation of a New Processor Model's Operation Formats},label=lst:newopformatsimpl]
+\begin{lstlisting}[style=code,float=!b,caption={Implementation of a New Processor Model's Operation Formats},label=lst:newopformatsimpl]
 ^ifdef HAVE_CONFIG_H^
 ^#include^ §<config_wir.h>§
 ^#endif^
@@ -1123,8 +1134,13 @@ const Ü{\itshape newModel}Ü::OperationFormat Ü{\itshape newModel}Ü::Operatio
 \end{lstlisting}
 
   Edit the \texttt{init} method in file \texttt{WIR/arch/{\itshape archDir}/{\itshape newModel}.cc} and create virtual registers of the various types realized in \cref{ssec:newregtypes} (cf. \cref{lst:newformatregister1} of \cref{lst:newformatregister}).
+  For each operation format declared in \cref{enum:newopformat}, add a call to \texttt{register\-OperationFormat} afterwards (\cref{lst:newformatregister3,lst:newformatregister4}).
+  Pay attention that the exact amount of register, immediate or other parameters is provided to \texttt{registerOperationFormat} in exactly that order in which the \gls{ISA} specification expects them.
+  For register parameters, ensure that their usage characteristics (cf. type \texttt{WIR\_Usage} from \cref{lst:regparamconstruction}) are correctly registered.
+  If an operation format of the \gls{ISA} supports any register of a particular type as parameter, use a virtual register of that type here.
+  Otherwise, if an operation format requires a very specific processor register only as parameter (e.g., the architecture's stack pointer), create an instance of that particular physical register first (\cref{lst:newformatregister2}) and then use this physical register for \texttt{registerOperationFormat}.
 
-\begin{lstlisting}[style=code,float=!b,caption={Operation Format Registration in a New Processor Model's \texttt{init} Method},label=lst:newformatregister]
+\begin{lstlisting}[style=code,float=t,caption={Operation Format Registration in a New Processor Model's \texttt{init} Method},label=lst:newformatregister]
 // Globally initialize a processor model.
 @void@ Ü{\itshape newModel}Ü::init@( void )@
 {
@@ -1147,11 +1163,6 @@ const Ü{\itshape newModel}Ü::OperationFormat Ü{\itshape newModel}Ü::Operatio
   [...]
 };
 \end{lstlisting}
-  For each operation format declared in \cref{enum:newopformat}, add a call to \texttt{register\-OperationFormat} afterwards (\cref{lst:newformatregister3,lst:newformatregister4}).
-  Pay attention that the exact amount of register, immediate or other parameters is provided to \texttt{registerOperationFormat} in exactly that order in which the \gls{ISA} specification expects them.
-  For register parameters, ensure that their usage characteristics (cf. type \texttt{WIR\_Usage} from \cref{lst:regparamconstruction}) are correctly registered.
-  If an operation format of the \gls{ISA} supports any register of a particular type as parameter, use a virtual register of that type here.
-  Otherwise, if an operation format requires a very specific processor register only as parameter (e.g., the architecture's stack pointer), create an instance of that particular physical register first (\cref{lst:newformatregister2}) and then use this physical register for \texttt{registerOperationFormat}.
 
   A concrete example of this operation format registration for the TriCore \texttt{TC13} architecture was given in \cref{lst:tcopfreg} on \cpageref{lst:tcopfreg}.
 
@@ -1205,8 +1216,11 @@ namespace WIR {
   \item Add \\
   \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|io.cc arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|io.h| \\
   to the \texttt{libwir\_la\_SOURCES} directive of file \texttt{WIR/arch/{\itshape archDir}/Makefile.src}.
+  Furthermore, add \\
+  \verb|  arch/|\texttt{\itshape archDir}\verb|/|\texttt{\itshape newModel}\verb|io.h| \\
+  to the \texttt{{\itshape archDir}include\_HEADERS} directive of the very same Makefile.
 
-\begin{lstlisting}[style=code,float=t,caption={Rudimentary Implementation of a New Processor Model's Stream Output},label=lst:newprocioimpl]
+\begin{lstlisting}[style=code,float=!b,caption={Rudimentary Implementation of a New Processor Model's Stream Output},label=lst:newprocioimpl]
 ^ifdef HAVE_CONFIG_H^
 ^#include^ §<config_wir.h>§
 ^#endif^

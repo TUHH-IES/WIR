@@ -208,6 +208,9 @@ include arch/Ü{\itshape archDir}Ü/analyses/bit/Makefile.src
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/Makefile.src} with the following contents: \\
 \begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 libwir_la_SOURCES        += arch/Ü{\itshape archDir}Ü/analyses/bit/Ü{\itshape newModel}Übitdfa.cc arch/Ü{\itshape archDir}Ü/analyses/bit/Ü{\itshape newModel}Übitdfa.h
+
+Ü{\itshape archDir}Übitincludedir      = ${includedir}/arch/Ü{\itshape archDir}Ü/analyses/bit
+Ü{\itshape archDir}Übitinclude_HEADERS = arch/Ü{\itshape archDir}Ü/analyses/bit/Ü{\itshape newModel}Übitdfa.h
 \end{lstlisting}
 
   \item Create a new file \texttt{WIR/arch/{\itshape archDir}/analyses/bit/{\itshape newModel}bitdfa.h} according to the general structure depicted in \cref{lst:newprocbitheader}.
@@ -418,10 +421,8 @@ if @(@ o.getOpCode@()@ == RV32I::OpCode::ADD @)@ {
   In analogy to this previous example, machine operations for integer subtraction, multiplication, division and modulo can be modeled for bit-true forward analysis.
 
   Likewise, \emph{integer comparison} operators of down values are also provided by class \texttt{WIR\_UpDownValue} which facilitates the modelling of machine operations for greater-equal, less-than and other similar operations.
-  The following example shows the realization of the RISC-V SLT and SLTU less-than comparisons, once signed and once unsigned, resp.:
-
-  \clearpage
-\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,belowskip=-0.8 \baselineskip]
+  The following example shows the realization of the RISC-V SLT and SLTU less-than comparisons, once signed and once unsigned, resp.: \\
+\begin{lstlisting}[style=code,float=!h,xleftmargin=10mm,aboveskip=-0.8 \baselineskip,belowskip=-0.8 \baselineskip]
 if @( (@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@ || @(@ o.getOpCode@()@ == RV32I::OpCode::SLTU @) )@ {
   auto æ&æa = nthOp@(@ §1§ @)@;
   a.setSignedness@(@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@;
@@ -432,7 +433,7 @@ if @( (@ o.getOpCode@()@ == RV32I::OpCode::SLT @)@ || @(@ o.getOpCode@()@ == RV3
   nthRes@(@ §0§ @)[@ §0§ @]@ = @(@ a < b @)@;
 }
 \end{lstlisting}
-
+  \\
   The important point here is to explicitly set or reset the signedness of the operands' down values, depending on whether a signed or unsigned comparison is desired.
   For many architectures, such operations produce a Boolean result in the target register where all bits are cleared and only the least-significant bit contains the binary comparison result.
   This behavior is mimiced in the above example where the result's down value is completely set to \texttt{b0} first, and only its bit 0 is set to the comparison result.
